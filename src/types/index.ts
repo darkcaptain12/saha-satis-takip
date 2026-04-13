@@ -1,5 +1,5 @@
 export type Role = 'admin' | 'personel'
-export type LocationStatus = 'success' | 'failed' | 'skipped'
+export type LocationStatus = 'success' | 'failed' | 'skipped' | 'manual'
 
 export interface Profile {
   id: string
@@ -31,6 +31,7 @@ export interface Visit {
   longitude: number | null
   accuracy: number | null
   location_status: LocationStatus
+  address: string | null
   created_at: string
 }
 

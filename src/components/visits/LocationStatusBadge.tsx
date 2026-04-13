@@ -1,5 +1,5 @@
 import { Badge } from '@/components/ui/Badge'
-import { MapPin, MapPinOff, MinusCircle } from 'lucide-react'
+import { MapPin, MapPinOff, MinusCircle, PenLine } from 'lucide-react'
 import type { LocationStatus } from '@/types'
 
 interface LocationStatusBadgeProps {
@@ -20,6 +20,14 @@ export function LocationStatusBadge({ status }: LocationStatusBadgeProps) {
       <Badge variant="red">
         <MapPinOff className="h-3 w-3" />
         Konum Alınamadı
+      </Badge>
+    )
+  }
+  if (status === 'manual') {
+    return (
+      <Badge variant="blue">
+        <PenLine className="h-3 w-3" />
+        Manuel Adres
       </Badge>
     )
   }

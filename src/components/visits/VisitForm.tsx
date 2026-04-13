@@ -9,13 +9,15 @@ import { Textarea } from '@/components/ui/Textarea'
 import { Alert } from '@/components/ui/Alert'
 import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
-import { MapPin, MapPinOff, Navigation } from 'lucide-react'
+import { MapPin, Navigation, PenLine } from 'lucide-react'
 import { getTodayIso, getCurrentTimeStr } from '@/lib/utils'
 import type { Company, GPSCapture } from '@/types'
 
 interface VisitFormProps {
   userId: string
 }
+
+type LocationMode = 'gps' | 'manual'
 
 export function VisitForm({ userId }: VisitFormProps) {
   const router = useRouter()
@@ -26,14 +28,15 @@ export function VisitForm({ userId }: VisitFormProps) {
   const [selectedCompany, setSelectedCompany] = useState<Company | null>(null)
   const [showSuggestions, setShowSuggestions] = useState(false)
   const [note, setNote] = useState('')
+  const [locationMode, setLocationMode] = useState<LocationMode>('gps')
   const [gpsResult, setGpsResult] = useState<GPSCapture | null>(null)
+  const [manualAddress, setManualAddress] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const todayStr = getTodayIso()
   const timeRef = useRef(getCurrentTimeStr())
 
-  // Firma listesini çek
   useEffect(() => {
     createClient()
       .from('companies')
@@ -64,6 +67,13 @@ export function VisitForm({ userId }: VisitFormProps) {
     setGpsResult(result)
   }
 
+  const handleModeSwitch = (mode: LocationMode) => {
+    setLocationMode(mode)
+    setGpsResult(null)
+    setManualAddress('')
+    setError(null)
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError(null)
@@ -73,18 +83,38 @@ export function VisitForm({ userId }: VisitFormProps) {
       return
     }
 
-    // Konum henüz alınmadıysa otomatik al
-    let location = gpsResult
-    if (!location) {
-      location = await capture()
-      setGpsResult(location)
-    }
+    let latitude: number | null = null
+    let longitude: number | null = null
+    let accuracy: number | null = null
+    let location_status: 'success' | 'failed' | 'skipped' | 'manual' = 'skipped'
+    let address: string | null = null
 
-    if (!location || location.status === 'failed') {
-      setError(
-        `Konum alınamadı${location?.status === 'failed' ? `: ${(location as { status: 'failed'; reason: string }).reason}` : ''}. Konum izni vermek için tarayıcı adres çubuğundaki kilit simgesine tıklayın.`
-      )
-      return
+    if (locationMode === 'gps') {
+      let location = gpsResult
+      if (!location) {
+        location = await capture()
+        setGpsResult(location)
+      }
+
+      if (!location || location.status === 'failed') {
+        setError(
+          `Konum alınamadı${location?.status === 'failed' ? `: ${(location as { status: 'failed'; reason: string }).reason}` : ''}. Konum izni vermek için tarayıcı adres çubuğundaki kilit simgesine tıklayın.`
+        )
+        return
+      }
+
+      latitude = location.latitude
+      longitude = location.longitude
+      accuracy = location.accuracy
+      location_status = 'success'
+    } else {
+      // Manuel adres modu
+      if (!manualAddress.trim()) {
+        setError('Manuel adres giriniz.')
+        return
+      }
+      address = manualAddress.trim()
+      location_status = 'manual'
     }
 
     setSubmitting(true)
@@ -96,10 +126,11 @@ export function VisitForm({ userId }: VisitFormProps) {
       note: note.trim() || null,
       visit_date: todayStr,
       visit_time: timeRef.current,
-      latitude: location.status === 'success' ? location.latitude : null,
-      longitude: location.status === 'success' ? location.longitude : null,
-      accuracy: location.status === 'success' ? location.accuracy : null,
-      location_status: location.status as 'success' | 'failed' | 'skipped',
+      latitude,
+      longitude,
+      accuracy,
+      location_status,
+      address,
     }
 
     const { error: insertErr } = await createClient().from('visits').insert(visitData)
@@ -163,49 +194,95 @@ export function VisitForm({ userId }: VisitFormProps) {
         rows={4}
       />
 
-      {/* Konum */}
+      {/* Konum Modu Seçimi */}
       <Card className="p-4">
-        <div className="flex items-center justify-between mb-3">
-          <p className="text-sm font-medium text-gray-700">Konum Bilgisi</p>
-          {gpsResult && (
-            <Badge variant={gpsResult.status === 'success' ? 'green' : 'red'}>
-              {gpsResult.status === 'success' ? (
-                <><MapPin className="h-3 w-3" /> Alındı</>
-              ) : (
-                <><MapPinOff className="h-3 w-3" /> Alınamadı</>
-              )}
-            </Badge>
-          )}
+        <p className="text-sm font-medium text-gray-700 mb-3">Konum Bilgisi</p>
+
+        {/* Tab seçici */}
+        <div className="flex rounded-lg border border-gray-200 overflow-hidden mb-4">
+          <button
+            type="button"
+            onClick={() => handleModeSwitch('gps')}
+            className={`flex-1 flex items-center justify-center gap-2 py-2 text-sm font-medium transition-colors ${
+              locationMode === 'gps'
+                ? 'bg-brand text-white'
+                : 'bg-white text-gray-600 hover:bg-gray-50'
+            }`}
+          >
+            <Navigation className="h-4 w-4" />
+            GPS Konum
+          </button>
+          <button
+            type="button"
+            onClick={() => handleModeSwitch('manual')}
+            className={`flex-1 flex items-center justify-center gap-2 py-2 text-sm font-medium transition-colors border-l border-gray-200 ${
+              locationMode === 'manual'
+                ? 'bg-brand text-white'
+                : 'bg-white text-gray-600 hover:bg-gray-50'
+            }`}
+          >
+            <PenLine className="h-4 w-4" />
+            Manuel Adres
+          </button>
         </div>
 
-        {gpsResult?.status === 'success' && (
-          <div className="bg-green-50 rounded-lg p-3 mb-3 text-xs text-green-700 space-y-0.5">
-            <p><strong>Lat:</strong> {gpsResult.latitude.toFixed(6)}</p>
-            <p><strong>Lng:</strong> {gpsResult.longitude.toFixed(6)}</p>
-            <p><strong>Doğruluk:</strong> ±{gpsResult.accuracy.toFixed(0)} metre</p>
-          </div>
+        {/* GPS Modu */}
+        {locationMode === 'gps' && (
+          <>
+            {gpsResult?.status === 'success' && (
+              <div className="flex items-center justify-between mb-3">
+                <Badge variant="green">
+                  <MapPin className="h-3 w-3" /> Konum Alındı
+                </Badge>
+                <span className="text-xs text-gray-400">±{gpsResult.accuracy.toFixed(0)}m doğruluk</span>
+              </div>
+            )}
+            {gpsResult?.status === 'success' && (
+              <div className="bg-green-50 rounded-lg p-3 mb-3 text-xs text-green-700 space-y-0.5">
+                <p><strong>Lat:</strong> {gpsResult.latitude.toFixed(6)}</p>
+                <p><strong>Lng:</strong> {gpsResult.longitude.toFixed(6)}</p>
+              </div>
+            )}
+            {gpsResult?.status === 'failed' && (
+              <Alert variant="warning" className="mb-3 text-xs">
+                {gpsResult.reason}
+              </Alert>
+            )}
+            <Button
+              type="button"
+              variant={gpsResult?.status === 'success' ? 'secondary' : 'primary'}
+              size="md"
+              loading={capturing}
+              onClick={handleGetLocation}
+              className="w-full"
+            >
+              <Navigation className="h-4 w-4" />
+              {gpsResult?.status === 'success' ? 'Konumu Yenile' : 'Konumu Al'}
+            </Button>
+            <p className="text-xs text-gray-400 mt-2 text-center">
+              Kayıt oluşturulurken anlık konumunuz alınır
+            </p>
+          </>
         )}
 
-        {gpsResult?.status === 'failed' && (
-          <Alert variant="warning" className="mb-3 text-xs">
-            {gpsResult.reason}
-          </Alert>
+        {/* Manuel Adres Modu */}
+        {locationMode === 'manual' && (
+          <>
+            <Badge variant="blue" className="mb-3">
+              <PenLine className="h-3 w-3" /> Manuel Adres
+            </Badge>
+            <Textarea
+              label="Adres"
+              value={manualAddress}
+              onChange={(e) => setManualAddress(e.target.value)}
+              placeholder="Ziyaret adresi girin (sokak, mahalle, ilçe...)"
+              rows={3}
+            />
+            <p className="text-xs text-gray-400 mt-2">
+              GPS sinyali alınamadığında veya tam adresi yazmak istediğinizde kullanın
+            </p>
+          </>
         )}
-
-        <Button
-          type="button"
-          variant={gpsResult?.status === 'success' ? 'secondary' : 'primary'}
-          size="md"
-          loading={capturing}
-          onClick={handleGetLocation}
-          className="w-full"
-        >
-          <Navigation className="h-4 w-4" />
-          {gpsResult?.status === 'success' ? 'Konumu Yenile' : 'Konumu Al'}
-        </Button>
-        <p className="text-xs text-gray-400 mt-2 text-center">
-          Kayıt oluşturulurken anlık konumunuz alınır
-        </p>
       </Card>
 
       <Button

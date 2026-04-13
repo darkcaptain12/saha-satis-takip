@@ -49,15 +49,17 @@ create table if not exists public.visits (
   latitude              numeric(10, 7),
   longitude             numeric(10, 7),
   accuracy              numeric(8, 2),         -- metre cinsinden GPS doğruluğu
+  address               text,                  -- manuel adres girişi
   location_status       text not null default 'success'
-                          check (location_status in ('success', 'failed', 'skipped')),
+                          check (location_status in ('success', 'failed', 'skipped', 'manual')),
   created_at            timestamptz not null default now()
 );
 
 comment on table public.visits is 'Saha ziyaret kayıtları';
 comment on column public.visits.company_name_snapshot is 'Kayıt anındaki firma adı - firma silinse bile korunur';
 comment on column public.visits.accuracy is 'GPS konum doğruluğu (metre)';
-comment on column public.visits.location_status is 'success: konum alındı, failed: alınamadı, skipped: atlandı';
+comment on column public.visits.address is 'Manuel adres girişi (location_status=manual olduğunda kullanılır)';
+comment on column public.visits.location_status is 'success: konum alındı, failed: alınamadı, skipped: atlandı, manual: elle adres girildi';
 
 -- ============================================================
 -- INDEXES - Sorgu performansı için

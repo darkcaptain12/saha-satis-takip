@@ -2,9 +2,10 @@ import { createClient } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
 import { Card } from '@/components/ui/Card'
 import { LocationStatusBadge } from '@/components/visits/LocationStatusBadge'
+import { DeleteVisitButton } from '@/components/visits/DeleteVisitButton'
 import { formatDate, formatTime } from '@/lib/utils'
 import { VisitMap } from '@/components/map/VisitMap'
-import { Building2, User, Clock, MapPin, FileText } from 'lucide-react'
+import { Building2, User, Clock, MapPin, FileText, Navigation2 } from 'lucide-react'
 import Link from 'next/link'
 import type { Visit, Profile } from '@/types'
 
@@ -33,8 +34,11 @@ export default async function AdminZiyaretDetayPage({ params }: PageProps) {
 
   return (
     <div className="max-w-2xl space-y-4">
-      <div className="flex items-center gap-2 text-sm text-gray-500">
-        <Link href="/admin/ziyaretler" className="hover:text-brand">← Ziyaretler</Link>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2 text-sm text-gray-500">
+          <Link href="/admin/ziyaretler" className="hover:text-brand">← Ziyaretler</Link>
+        </div>
+        <DeleteVisitButton visitId={v.id} companyName={v.company_name_snapshot} />
       </div>
 
       <Card>
@@ -56,6 +60,14 @@ export default async function AdminZiyaretDetayPage({ params }: PageProps) {
               icon={<MapPin className="h-4 w-4 text-gray-400" />}
               label="Koordinat"
               value={`${v.latitude?.toFixed(6)}, ${v.longitude?.toFixed(6)} (±${v.accuracy?.toFixed(0)}m)`}
+            />
+          )}
+          {v.location_status === 'manual' && v.address && (
+            <InfoRow
+              icon={<Navigation2 className="h-4 w-4 text-gray-400" />}
+              label="Manuel Adres"
+              value={v.address}
+              multiline
             />
           )}
           {v.note && (
