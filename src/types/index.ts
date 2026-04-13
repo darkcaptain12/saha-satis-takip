@@ -1,5 +1,6 @@
 export type Role = 'admin' | 'personel'
 export type LocationStatus = 'success' | 'failed' | 'skipped' | 'manual'
+export type VisitStatus = 'gorusuldu' | 'teklif_verildi' | 'takip_gerekli' | 'siparis_alindi'
 
 export interface Profile {
   id: string
@@ -7,6 +8,7 @@ export interface Profile {
   email: string
   role: Role
   active: boolean
+  avatar_url: string | null
   created_at: string
 }
 
@@ -32,6 +34,8 @@ export interface Visit {
   accuracy: number | null
   location_status: LocationStatus
   address: string | null
+  status: VisitStatus | null
+  photo_url: string | null
   created_at: string
 }
 

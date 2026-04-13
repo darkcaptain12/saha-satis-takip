@@ -3,15 +3,18 @@ import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { useGPS } from '@/hooks/useGPS'
+import { uploadPhoto } from '@/hooks/usePhotoUpload'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Textarea } from '@/components/ui/Textarea'
+import { Select } from '@/components/ui/Select'
 import { Alert } from '@/components/ui/Alert'
 import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
-import { MapPin, Navigation, PenLine } from 'lucide-react'
+import { MapPin, Navigation, PenLine, Camera, X } from 'lucide-react'
 import { getTodayIso, getCurrentTimeStr } from '@/lib/utils'
-import type { Company, GPSCapture } from '@/types'
+import { VISIT_STATUS_OPTIONS } from '@/components/visits/VisitStatusBadge'
+import type { Company, GPSCapture, VisitStatus } from '@/types'
 
 interface VisitFormProps {
   userId: string
@@ -27,12 +30,16 @@ export function VisitForm({ userId }: VisitFormProps) {
   const [companyInput, setCompanyInput] = useState('')
   const [selectedCompany, setSelectedCompany] = useState<Company | null>(null)
   const [showSuggestions, setShowSuggestions] = useState(false)
+  const [visitStatus, setVisitStatus] = useState<VisitStatus | ''>('')
   const [note, setNote] = useState('')
   const [locationMode, setLocationMode] = useState<LocationMode>('gps')
   const [gpsResult, setGpsResult] = useState<GPSCapture | null>(null)
   const [manualAddress, setManualAddress] = useState('')
+  const [photoFile, setPhotoFile] = useState<File | null>(null)
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const photoInputRef = useRef<HTMLInputElement>(null)
 
   const todayStr = getTodayIso()
   const timeRef = useRef(getCurrentTimeStr())
@@ -74,6 +81,19 @@ export function VisitForm({ userId }: VisitFormProps) {
     setError(null)
   }
 
+  const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setPhotoFile(file)
+    setPhotoPreview(URL.createObjectURL(file))
+  }
+
+  const handleRemovePhoto = () => {
+    setPhotoFile(null)
+    setPhotoPreview(null)
+    if (photoInputRef.current) photoInputRef.current.value = ''
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError(null)
@@ -95,20 +115,17 @@ export function VisitForm({ userId }: VisitFormProps) {
         location = await capture()
         setGpsResult(location)
       }
-
       if (!location || location.status === 'failed') {
         setError(
           `Konum alınamadı${location?.status === 'failed' ? `: ${(location as { status: 'failed'; reason: string }).reason}` : ''}. Konum izni vermek için tarayıcı adres çubuğundaki kilit simgesine tıklayın.`
         )
         return
       }
-
       latitude = location.latitude
       longitude = location.longitude
       accuracy = location.accuracy
       location_status = 'success'
     } else {
-      // Manuel adres modu
       if (!manualAddress.trim()) {
         setError('Manuel adres giriniz.')
         return
@@ -118,6 +135,19 @@ export function VisitForm({ userId }: VisitFormProps) {
     }
 
     setSubmitting(true)
+
+    // Fotoğraf yükleme
+    let photo_url: string | null = null
+    if (photoFile) {
+      const ext = photoFile.name.split('.').pop() ?? 'jpg'
+      const path = `${userId}/${Date.now()}.${ext}`
+      photo_url = await uploadPhoto(photoFile, 'visit-photos', path)
+      if (!photo_url) {
+        setError('Fotoğraf yüklenemedi, lütfen tekrar deneyin veya fotoğraf olmadan kaydedin.')
+        setSubmitting(false)
+        return
+      }
+    }
 
     const visitData = {
       user_id: userId,
@@ -131,6 +161,8 @@ export function VisitForm({ userId }: VisitFormProps) {
       accuracy,
       location_status,
       address,
+      status: visitStatus || null,
+      photo_url,
     }
 
     const { error: insertErr } = await createClient().from('visits').insert(visitData)
@@ -148,7 +180,7 @@ export function VisitForm({ userId }: VisitFormProps) {
     <form onSubmit={handleSubmit} className="space-y-5">
       {error && <Alert variant="error">{error}</Alert>}
 
-      {/* Tarih ve Saat (otomatik) */}
+      {/* Tarih ve Saat */}
       <div className="grid grid-cols-2 gap-4">
         <Input label="Tarih" value={todayStr} readOnly className="bg-gray-50" />
         <Input label="Saat" value={timeRef.current} readOnly className="bg-gray-50" />
@@ -185,6 +217,18 @@ export function VisitForm({ userId }: VisitFormProps) {
         )}
       </div>
 
+      {/* Ziyaret Durumu */}
+      <Select
+        label="Ziyaret Durumu"
+        placeholder="Durum seçin (isteğe bağlı)"
+        value={visitStatus}
+        onChange={(e) => setVisitStatus(e.target.value as VisitStatus | '')}
+      >
+        {VISIT_STATUS_OPTIONS.map((opt) => (
+          <option key={opt.value} value={opt.value}>{opt.label}</option>
+        ))}
+      </Select>
+
       {/* Not */}
       <Textarea
         label="Ziyaret Notu"
@@ -194,19 +238,16 @@ export function VisitForm({ userId }: VisitFormProps) {
         rows={4}
       />
 
-      {/* Konum Modu Seçimi */}
+      {/* Konum */}
       <Card className="p-4">
         <p className="text-sm font-medium text-gray-700 mb-3">Konum Bilgisi</p>
 
-        {/* Tab seçici */}
         <div className="flex rounded-lg border border-gray-200 overflow-hidden mb-4">
           <button
             type="button"
             onClick={() => handleModeSwitch('gps')}
             className={`flex-1 flex items-center justify-center gap-2 py-2 text-sm font-medium transition-colors ${
-              locationMode === 'gps'
-                ? 'bg-brand text-white'
-                : 'bg-white text-gray-600 hover:bg-gray-50'
+              locationMode === 'gps' ? 'bg-brand text-white' : 'bg-white text-gray-600 hover:bg-gray-50'
             }`}
           >
             <Navigation className="h-4 w-4" />
@@ -216,9 +257,7 @@ export function VisitForm({ userId }: VisitFormProps) {
             type="button"
             onClick={() => handleModeSwitch('manual')}
             className={`flex-1 flex items-center justify-center gap-2 py-2 text-sm font-medium transition-colors border-l border-gray-200 ${
-              locationMode === 'manual'
-                ? 'bg-brand text-white'
-                : 'bg-white text-gray-600 hover:bg-gray-50'
+              locationMode === 'manual' ? 'bg-brand text-white' : 'bg-white text-gray-600 hover:bg-gray-50'
             }`}
           >
             <PenLine className="h-4 w-4" />
@@ -226,15 +265,12 @@ export function VisitForm({ userId }: VisitFormProps) {
           </button>
         </div>
 
-        {/* GPS Modu */}
         {locationMode === 'gps' && (
           <>
             {gpsResult?.status === 'success' && (
               <div className="flex items-center justify-between mb-3">
-                <Badge variant="green">
-                  <MapPin className="h-3 w-3" /> Konum Alındı
-                </Badge>
-                <span className="text-xs text-gray-400">±{gpsResult.accuracy.toFixed(0)}m doğruluk</span>
+                <Badge variant="green"><MapPin className="h-3 w-3" /> Konum Alındı</Badge>
+                <span className="text-xs text-gray-400">±{gpsResult.accuracy.toFixed(0)}m</span>
               </div>
             )}
             {gpsResult?.status === 'success' && (
@@ -244,9 +280,7 @@ export function VisitForm({ userId }: VisitFormProps) {
               </div>
             )}
             {gpsResult?.status === 'failed' && (
-              <Alert variant="warning" className="mb-3 text-xs">
-                {gpsResult.reason}
-              </Alert>
+              <Alert variant="warning" className="mb-3 text-xs">{gpsResult.reason}</Alert>
             )}
             <Button
               type="button"
@@ -259,18 +293,12 @@ export function VisitForm({ userId }: VisitFormProps) {
               <Navigation className="h-4 w-4" />
               {gpsResult?.status === 'success' ? 'Konumu Yenile' : 'Konumu Al'}
             </Button>
-            <p className="text-xs text-gray-400 mt-2 text-center">
-              Kayıt oluşturulurken anlık konumunuz alınır
-            </p>
           </>
         )}
 
-        {/* Manuel Adres Modu */}
         {locationMode === 'manual' && (
           <>
-            <Badge variant="blue" className="mb-3">
-              <PenLine className="h-3 w-3" /> Manuel Adres
-            </Badge>
+            <Badge variant="blue" className="mb-3"><PenLine className="h-3 w-3" /> Manuel Adres</Badge>
             <Textarea
               label="Adres"
               value={manualAddress}
@@ -278,19 +306,49 @@ export function VisitForm({ userId }: VisitFormProps) {
               placeholder="Ziyaret adresi girin (sokak, mahalle, ilçe...)"
               rows={3}
             />
-            <p className="text-xs text-gray-400 mt-2">
-              GPS sinyali alınamadığında veya tam adresi yazmak istediğinizde kullanın
-            </p>
+            <p className="text-xs text-gray-400 mt-2">GPS sinyali alınamadığında veya tam adres yazmak istediğinizde kullanın</p>
           </>
         )}
       </Card>
 
-      <Button
-        type="submit"
-        size="lg"
-        loading={submitting}
-        className="w-full"
-      >
+      {/* Fotoğraf */}
+      <Card className="p-4">
+        <p className="text-sm font-medium text-gray-700 mb-3">Ziyaret Fotoğrafı <span className="text-gray-400 font-normal">(isteğe bağlı)</span></p>
+
+        {photoPreview ? (
+          <div className="relative">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={photoPreview} alt="Önizleme" className="w-full max-h-48 object-cover rounded-lg" />
+            <button
+              type="button"
+              onClick={handleRemovePhoto}
+              className="absolute top-2 right-2 bg-red-600 text-white rounded-full p-1 hover:bg-red-700 transition-colors"
+            >
+              <X className="h-3 w-3" />
+            </button>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => photoInputRef.current?.click()}
+            className="w-full border-2 border-dashed border-gray-200 rounded-lg py-6 flex flex-col items-center gap-2 text-gray-400 hover:border-brand hover:text-brand transition-colors"
+          >
+            <Camera className="h-6 w-6" />
+            <span className="text-sm">Fotoğraf Çek / Seç</span>
+          </button>
+        )}
+
+        <input
+          ref={photoInputRef}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          className="hidden"
+          onChange={handlePhotoChange}
+        />
+      </Card>
+
+      <Button type="submit" size="lg" loading={submitting} className="w-full">
         Ziyareti Kaydet
       </Button>
     </form>

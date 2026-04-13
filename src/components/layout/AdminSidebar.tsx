@@ -12,6 +12,7 @@ import {
   Printer,
   X,
 } from 'lucide-react'
+import Image from 'next/image'
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/hooks/useAuth'
 
@@ -96,9 +97,20 @@ export function AdminSidebar({ open, onClose }: AdminSidebarProps) {
 
         {/* User info + logout */}
         <div className="px-4 py-4 border-t border-brand-light/30">
-          <div className="mb-3 px-1">
-            <p className="text-white text-sm font-medium truncate">{profile?.name}</p>
-            <p className="text-white/50 text-xs truncate">{profile?.email}</p>
+          <div className="flex items-center gap-3 mb-3 px-1">
+            {profile?.avatar_url ? (
+              <div className="relative w-8 h-8 rounded-full overflow-hidden ring-2 ring-white/20 shrink-0">
+                <Image src={profile.avatar_url} alt={profile.name} fill className="object-cover" unoptimized />
+              </div>
+            ) : (
+              <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center text-white text-xs font-semibold shrink-0">
+                {profile?.name?.charAt(0).toUpperCase()}
+              </div>
+            )}
+            <div className="min-w-0">
+              <p className="text-white text-sm font-medium truncate">{profile?.name}</p>
+              <p className="text-white/50 text-xs truncate">{profile?.email}</p>
+            </div>
           </div>
           <button
             onClick={signOut}

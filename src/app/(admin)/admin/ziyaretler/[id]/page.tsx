@@ -2,10 +2,13 @@ import { createClient } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
 import { Card } from '@/components/ui/Card'
 import { LocationStatusBadge } from '@/components/visits/LocationStatusBadge'
+import { VisitStatusBadge } from '@/components/visits/VisitStatusBadge'
 import { DeleteVisitButton } from '@/components/visits/DeleteVisitButton'
+import { AdminEditVisitButton } from '@/components/visits/AdminEditVisitButton'
 import { formatDate, formatTime } from '@/lib/utils'
 import { VisitMap } from '@/components/map/VisitMap'
-import { Building2, User, Clock, MapPin, FileText, Navigation2 } from 'lucide-react'
+import { Building2, User, Clock, MapPin, FileText, Navigation2, Tag } from 'lucide-react'
+import Image from 'next/image'
 import Link from 'next/link'
 import type { Visit, Profile } from '@/types'
 
@@ -38,13 +41,19 @@ export default async function AdminZiyaretDetayPage({ params }: PageProps) {
         <div className="flex items-center gap-2 text-sm text-gray-500">
           <Link href="/admin/ziyaretler" className="hover:text-brand">← Ziyaretler</Link>
         </div>
-        <DeleteVisitButton visitId={v.id} companyName={v.company_name_snapshot} />
+        <div className="flex gap-2">
+          <AdminEditVisitButton visit={{ id: v.id, note: v.note, status: v.status }} />
+          <DeleteVisitButton visitId={v.id} companyName={v.company_name_snapshot} />
+        </div>
       </div>
 
       <Card>
-        <div className="flex items-start justify-between mb-6">
+        <div className="flex items-start justify-between mb-6 gap-4 flex-wrap">
           <h2 className="text-lg font-bold text-gray-900">{v.company_name_snapshot}</h2>
-          <LocationStatusBadge status={v.location_status} />
+          <div className="flex gap-2 flex-wrap">
+            {v.status && <VisitStatusBadge status={v.status} />}
+            <LocationStatusBadge status={v.location_status} />
+          </div>
         </div>
 
         <dl className="space-y-4">
@@ -55,6 +64,14 @@ export default async function AdminZiyaretDetayPage({ params }: PageProps) {
             label="Tarih / Saat"
             value={`${formatDate(v.visit_date)} · ${formatTime(v.visit_time)}`}
           />
+          {v.status && (
+            <InfoRow
+              icon={<Tag className="h-4 w-4 text-gray-400" />}
+              label="Ziyaret Durumu"
+              value={''}
+              badge={<VisitStatusBadge status={v.status} />}
+            />
+          )}
           {hasLocation && (
             <InfoRow
               icon={<MapPin className="h-4 w-4 text-gray-400" />}
@@ -81,13 +98,26 @@ export default async function AdminZiyaretDetayPage({ params }: PageProps) {
         </dl>
       </Card>
 
+      {v.photo_url && (
+        <Card padding={false} className="overflow-hidden">
+          <div className="px-4 pt-4 pb-2">
+            <p className="text-sm font-medium text-gray-700">Ziyaret Fotoğrafı</p>
+          </div>
+          <div className="relative w-full aspect-video">
+            <Image
+              src={v.photo_url}
+              alt="Ziyaret fotoğrafı"
+              fill
+              className="object-cover"
+              unoptimized
+            />
+          </div>
+        </Card>
+      )}
+
       {hasLocation && (
         <Card padding={false} className="overflow-hidden">
-          <VisitMap
-            visits={[v]}
-            height="320px"
-            singleVisit
-          />
+          <VisitMap visits={[v]} height="320px" singleVisit />
         </Card>
       )}
     </div>
@@ -95,13 +125,25 @@ export default async function AdminZiyaretDetayPage({ params }: PageProps) {
 }
 
 function InfoRow({
-  icon, label, value, multiline
+  icon, label, value, multiline, badge
 }: {
   icon: React.ReactNode
   label: string
   value: string
   multiline?: boolean
+  badge?: React.ReactNode
 }) {
+  if (badge) {
+    return (
+      <div className="flex gap-3">
+        <div className="mt-0.5">{icon}</div>
+        <div>
+          <dt className="text-xs text-gray-500 mb-0.5">{label}</dt>
+          <dd>{badge}</dd>
+        </div>
+      </div>
+    )
+  }
   return (
     <div className="flex gap-3">
       <div className="mt-0.5">{icon}</div>

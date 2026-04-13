@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { Card } from '@/components/ui/Card'
 import { LocationStatusBadge } from '@/components/visits/LocationStatusBadge'
+import { VisitStatusBadge } from '@/components/visits/VisitStatusBadge'
 import { formatDate, formatTime } from '@/lib/utils'
 import Link from 'next/link'
 import { AdminVisitFilters } from '@/components/visits/AdminVisitFilters'
@@ -13,6 +14,7 @@ interface PageProps {
     from?: string
     to?: string
     status?: string
+    vstatus?: string
   }>
 }
 
@@ -36,6 +38,7 @@ export default async function AdminZiyaretlerPage({ searchParams }: PageProps) {
   if (params.from)    query = query.gte('visit_date', params.from)
   if (params.to)      query = query.lte('visit_date', params.to)
   if (params.status)  query = query.eq('location_status', params.status)
+  if (params.vstatus) query = query.eq('status', params.vstatus)
 
   const { data: visits } = await query.limit(200)
 
@@ -58,6 +61,7 @@ export default async function AdminZiyaretlerPage({ searchParams }: PageProps) {
                 <th className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Tarih / Saat</th>
                 <th className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Personel</th>
                 <th className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Firma</th>
+                <th className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Durum</th>
                 <th className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Konum</th>
                 <th className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Not</th>
               </tr>
@@ -74,6 +78,10 @@ export default async function AdminZiyaretlerPage({ searchParams }: PageProps) {
                   <td className="px-6 py-4 text-gray-700">{v.profiles?.name}</td>
                   <td className="px-6 py-4 text-gray-900 font-medium">{v.company_name_snapshot}</td>
                   <td className="px-6 py-4">
+                    <VisitStatusBadge status={v.status} />
+                    {!v.status && <span className="text-xs text-gray-300">—</span>}
+                  </td>
+                  <td className="px-6 py-4">
                     <LocationStatusBadge status={v.location_status} />
                   </td>
                   <td className="px-6 py-4 text-gray-500 max-w-xs truncate">{v.note ?? '-'}</td>
@@ -81,7 +89,7 @@ export default async function AdminZiyaretlerPage({ searchParams }: PageProps) {
               ))}
               {(!visits || visits.length === 0) && (
                 <tr>
-                  <td colSpan={5} className="text-center py-12 text-gray-400 text-sm">
+                  <td colSpan={6} className="text-center py-12 text-gray-400 text-sm">
                     Filtrelere uygun ziyaret kaydı bulunamadı.
                   </td>
                 </tr>
@@ -106,7 +114,10 @@ export default async function AdminZiyaretlerPage({ searchParams }: PageProps) {
                   </p>
                   {v.note && <p className="text-xs text-gray-400 mt-1 line-clamp-2">{v.note}</p>}
                 </div>
-                <LocationStatusBadge status={v.location_status} />
+                <div className="flex flex-col gap-1 items-end shrink-0">
+                  {v.status && <VisitStatusBadge status={v.status} />}
+                  <LocationStatusBadge status={v.location_status} />
+                </div>
               </div>
             </Link>
           ))}

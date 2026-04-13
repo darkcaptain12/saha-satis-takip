@@ -46,16 +46,25 @@ export function RaporlarClient({ visits }: Props) {
       .slice(0, 10)
   }, [filtered])
 
+  const statusLabel = (s: string | null) => {
+    if (s === 'gorusuldu') return 'Görüşüldü'
+    if (s === 'teklif_verildi') return 'Teklif Verildi'
+    if (s === 'takip_gerekli') return 'Takip Gerekli'
+    if (s === 'siparis_alindi') return 'Sipariş Alındı'
+    return ''
+  }
+
   const exportCSV = () => {
     const rows = [
-      ['Tarih', 'Saat', 'Personel', 'Firma', 'Not', 'Konum Durumu'],
+      ['Tarih', 'Saat', 'Personel', 'Firma', 'Ziyaret Durumu', 'Not', 'Konum Durumu'],
       ...filtered.map((v) => [
         v.visit_date,
         formatTime(v.visit_time),
         v.profiles?.name ?? '',
         v.company_name_snapshot,
+        statusLabel(v.status),
         v.note?.replace(/\n/g, ' ') ?? '',
-        v.location_status === 'success' ? 'Alındı' : v.location_status === 'failed' ? 'Alınamadı' : 'Atlandı',
+        v.location_status === 'success' ? 'Alındı' : v.location_status === 'failed' ? 'Alınamadı' : v.location_status === 'manual' ? 'Manuel Adres' : 'Atlandı',
       ]),
     ]
     const csv = '\uFEFF' + rows.map((r) => r.map((c) => `"${c}"`).join(',')).join('\n')

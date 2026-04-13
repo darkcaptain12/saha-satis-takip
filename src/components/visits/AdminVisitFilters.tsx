@@ -18,6 +18,7 @@ interface AdminVisitFiltersProps {
     from?: string
     to?: string
     status?: string
+    vstatus?: string
   }
 }
 
@@ -57,7 +58,7 @@ export function AdminVisitFilters({ staff, companies, current }: AdminVisitFilte
         <Button variant="secondary" size="sm" onClick={() => setQuickFilter('month')}>Bu Ay</Button>
         <Button variant="ghost" size="sm" onClick={clearFilters}>Temizle</Button>
       </div>
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-7 gap-3">
         <Select
           placeholder="Tüm Personel"
           value={current.staff ?? ''}
@@ -79,13 +80,25 @@ export function AdminVisitFilters({ staff, companies, current }: AdminVisitFilte
         </Select>
 
         <Select
+          placeholder="Ziyaret Durumu"
+          value={current.vstatus ?? ''}
+          onChange={(e) => push({ vstatus: e.target.value || undefined })}
+        >
+          <option value="gorusuldu">Görüşüldü</option>
+          <option value="teklif_verildi">Teklif Verildi</option>
+          <option value="takip_gerekli">Takip Gerekli</option>
+          <option value="siparis_alindi">Sipariş Alındı</option>
+        </Select>
+
+        <Select
           placeholder="Konum Durumu"
           value={current.status ?? ''}
           onChange={(e) => push({ status: e.target.value || undefined })}
         >
-          <option value="success">Alındı</option>
+          <option value="success">Konum Alındı</option>
           <option value="failed">Alınamadı</option>
           <option value="skipped">Atlandı</option>
+          <option value="manual">Manuel Adres</option>
         </Select>
 
         <Input

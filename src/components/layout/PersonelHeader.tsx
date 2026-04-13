@@ -1,6 +1,7 @@
 'use client'
 import { Printer } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
+import Image from 'next/image'
 
 export function PersonelHeader() {
   const { profile } = useAuth()
@@ -14,9 +15,20 @@ export function PersonelHeader() {
         <span className="text-white font-semibold text-sm">Saha Satış</span>
       </div>
       {profile && (
-        <span className="text-white/80 text-xs">
-          Merhaba, {profile.name.split(' ')[0]}
-        </span>
+        <div className="flex items-center gap-2">
+          <span className="text-white/80 text-xs">
+            Merhaba, {profile.name.split(' ')[0]}
+          </span>
+          {profile.avatar_url ? (
+            <div className="relative w-7 h-7 rounded-full overflow-hidden ring-2 ring-white/30">
+              <Image src={profile.avatar_url} alt={profile.name} fill className="object-cover" unoptimized />
+            </div>
+          ) : (
+            <div className="w-7 h-7 rounded-full bg-white/20 flex items-center justify-center text-white text-xs font-semibold">
+              {profile.name.charAt(0).toUpperCase()}
+            </div>
+          )}
+        </div>
       )}
     </header>
   )
