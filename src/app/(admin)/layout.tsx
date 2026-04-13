@@ -2,6 +2,7 @@
 import { useState } from 'react'
 import { AdminSidebar } from '@/components/layout/AdminSidebar'
 import { AdminHeader } from '@/components/layout/AdminHeader'
+import { AdminBottomNav } from '@/components/layout/AdminBottomNav'
 import { usePathname } from 'next/navigation'
 
 const pageTitles: Record<string, string> = {
@@ -32,10 +33,12 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           title={getTitle(pathname)}
           onMenuClick={() => setSidebarOpen(true)}
         />
-        <main className="flex-1 p-4 lg:p-6">
+        {/* pb-20 mobilde bottom nav için alan bırakır */}
+        <main className="flex-1 p-4 pb-24 lg:p-6 lg:pb-6">
           {children}
         </main>
       </div>
+      <AdminBottomNav onMenuClick={() => setSidebarOpen(true)} />
     </div>
   )
 }
