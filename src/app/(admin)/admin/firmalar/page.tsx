@@ -3,6 +3,7 @@ import { Card } from '@/components/ui/Card'
 import { formatDate } from '@/lib/utils'
 import Link from 'next/link'
 import { AdminCompanyActions } from '@/components/companies/AdminCompanyActions'
+import { AdminGeocodeButton } from '@/components/companies/AdminGeocodeButton'
 import { Building2 } from 'lucide-react'
 
 export default async function AdminFirmalarPage() {
@@ -26,7 +27,8 @@ export default async function AdminFirmalarPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-end">
+      <div className="flex justify-end gap-2">
+        <AdminGeocodeButton />
         <AdminCompanyActions mode="add" />
       </div>
 
