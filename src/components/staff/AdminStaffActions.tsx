@@ -7,7 +7,7 @@ import { Select } from '@/components/ui/Select'
 import { Alert } from '@/components/ui/Alert'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
-import { UserPlus, MoreHorizontal } from 'lucide-react'
+import { UserPlus, MoreHorizontal, Trash2 } from 'lucide-react'
 import type { Profile } from '@/types'
 
 interface AdminStaffActionsProps {
@@ -17,11 +17,13 @@ interface AdminStaffActionsProps {
 
 export function AdminStaffActions({ mode, profile }: AdminStaffActionsProps) {
   const [open, setOpen] = useState(false)
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
   const [name, setName] = useState(profile?.name ?? '')
   const [email, setEmail] = useState(profile?.email ?? '')
   const [password, setPassword] = useState('')
   const [active, setActive] = useState(profile?.active ?? true)
   const [loading, setLoading] = useState(false)
+  const [deleteLoading, setDeleteLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const router = useRouter()
 
@@ -33,7 +35,6 @@ export function AdminStaffActions({ mode, profile }: AdminStaffActionsProps) {
 
     try {
       if (mode === 'add') {
-        // Yeni personel oluştur
         const res = await fetch('/api/admin/create-user', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -42,7 +43,6 @@ export function AdminStaffActions({ mode, profile }: AdminStaffActionsProps) {
         const data = await res.json()
         if (!res.ok) throw new Error(data.error ?? 'Kullanıcı oluşturulamadı.')
       } else if (profile) {
-        // Mevcut profili güncelle
         const { error: updateErr } = await supabase
           .from('profiles')
           .update({ name, active })
@@ -56,6 +56,32 @@ export function AdminStaffActions({ mode, profile }: AdminStaffActionsProps) {
       setError(err instanceof Error ? err.message : 'Bir hata oluştu.')
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleDelete = async () => {
+    if (!profile) return
+    setDeleteLoading(true)
+    setError(null)
+
+    try {
+      const res = await fetch('/api/admin/delete-user', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: profile.id }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error ?? 'Silme işlemi başarısız.')
+
+      setDeleteConfirmOpen(false)
+      setOpen(false)
+      router.push('/admin/personeller')
+      router.refresh()
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Bir hata oluştu.')
+      setDeleteConfirmOpen(false)
+    } finally {
+      setDeleteLoading(false)
     }
   }
 
@@ -75,6 +101,7 @@ export function AdminStaffActions({ mode, profile }: AdminStaffActionsProps) {
         </button>
       )}
 
+      {/* Düzenleme Modalı */}
       <Modal
         open={open}
         onClose={() => { setOpen(false); setError(null) }}
@@ -106,13 +133,54 @@ export function AdminStaffActions({ mode, profile }: AdminStaffActionsProps) {
               <option value="false">Pasif</option>
             </Select>
           )}
-          <div className="flex gap-3 justify-end pt-2">
+          <div className="flex items-center gap-3 pt-2">
+            {mode === 'edit' && (
+              <Button
+                variant="danger"
+                type="button"
+                size="sm"
+                onClick={() => { setOpen(false); setDeleteConfirmOpen(true) }}
+                className="mr-auto"
+              >
+                <Trash2 className="h-4 w-4" />
+                Sil
+              </Button>
+            )}
             <Button variant="secondary" type="button" onClick={() => setOpen(false)}>İptal</Button>
             <Button type="submit" loading={loading}>
               {mode === 'add' ? 'Ekle' : 'Kaydet'}
             </Button>
           </div>
         </form>
+      </Modal>
+
+      {/* Silme Onay Modalı */}
+      <Modal
+        open={deleteConfirmOpen}
+        onClose={() => setDeleteConfirmOpen(false)}
+        title="Personeli Kalıcı Sil"
+      >
+        {error && <Alert variant="error" className="mb-4">{error}</Alert>}
+        <div className="space-y-4">
+          <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+            <p className="text-sm font-semibold text-red-800 mb-1">⚠️ Bu işlem geri alınamaz!</p>
+            <p className="text-sm text-red-700">
+              <strong>{profile?.name}</strong> adlı personel ve tüm ziyaret kayıtları kalıcı olarak silinecek.
+            </p>
+          </div>
+          <p className="text-sm text-gray-600">
+            Silmek yerine personeli <strong>Pasif</strong> yaparak sisteme girişini engelleyebilirsiniz.
+          </p>
+          <div className="flex gap-3 justify-end">
+            <Button variant="secondary" type="button" onClick={() => setDeleteConfirmOpen(false)}>
+              Vazgeç
+            </Button>
+            <Button variant="danger" loading={deleteLoading} onClick={handleDelete}>
+              <Trash2 className="h-4 w-4" />
+              Evet, Kalıcı Sil
+            </Button>
+          </div>
+        </div>
       </Modal>
     </>
   )

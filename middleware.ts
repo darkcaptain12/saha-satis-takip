@@ -27,6 +27,7 @@ export async function middleware(request: NextRequest) {
     }
   )
 
+  // getUser() sunucu taraflı doğrulama + token yenileme tetikler
   const { data: { user } } = await supabase.auth.getUser()
 
   // Giriş yapmamış → /login'e yönlendir
@@ -34,57 +35,66 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL('/login', request.url))
   }
 
-  // Giriş yapmış + /login açmaya çalışıyor → dashboard'a yönlendir
+  // Giriş yapmış + /login açıyor → dashboard'a yönlendir
   if (user && pathname === '/login') {
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('role')
-      .eq('id', user.id)
-      .single()
-
-    const dest = profile?.role === 'admin' ? '/admin/dashboard' : '/personel/dashboard'
+    const role = await getUserRole(supabase, user.id)
+    if (role === null) return response // DB hatası → yönlendirme yapma
+    const dest = role === 'admin' ? '/admin/dashboard' : '/personel/dashboard'
     return NextResponse.redirect(new URL(dest, request.url))
   }
 
   // Kök yol → dashboard'a yönlendir
   if (user && pathname === '/') {
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('role')
-      .eq('id', user.id)
-      .single()
-
-    const dest = profile?.role === 'admin' ? '/admin/dashboard' : '/personel/dashboard'
+    const role = await getUserRole(supabase, user.id)
+    if (role === null) return response // DB hatası → yönlendirme yapma
+    const dest = role === 'admin' ? '/admin/dashboard' : '/personel/dashboard'
     return NextResponse.redirect(new URL(dest, request.url))
   }
 
-  // /admin/* → sadece admin
+  // /admin/* → sadece admin erişebilir
   if (pathname.startsWith('/admin')) {
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('role')
-      .eq('id', user!.id)
-      .single()
-
-    if (profile?.role !== 'admin') {
+    const role = await getUserRole(supabase, user!.id)
+    // DB sorgusu başarısız olduysa mevcut sayfada kal — adminı yanlış yere atma
+    if (role === null) return response
+    if (role !== 'admin') {
       return NextResponse.redirect(new URL('/personel/dashboard', request.url))
     }
   }
 
-  // /personel/* → sadece personel
+  // /personel/* → sadece personel erişebilir
   if (pathname.startsWith('/personel')) {
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('role')
-      .eq('id', user!.id)
-      .single()
-
-    if (profile?.role !== 'personel') {
+    const role = await getUserRole(supabase, user!.id)
+    // DB sorgusu başarısız olduysa mevcut sayfada kal — personeli yanlış yere atma
+    if (role === null) return response
+    if (role !== 'personel') {
       return NextResponse.redirect(new URL('/admin/dashboard', request.url))
     }
   }
 
   return response
+}
+
+/**
+ * Kullanıcı rolünü DB'den alır.
+ * Ağ hatası / timeout / geçici DB sorunu durumunda null döner.
+ * null gelince middleware hiç yönlendirme yapmaz — böylece
+ * mobilde uygulama arka planda beklerken oluşan geçici hata
+ * adminı yanlışlıkla personel paneline atmaz.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function getUserRole(supabase: any, userId: string): Promise<string | null> {
+  try {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', userId)
+      .single()
+
+    if (error || !data?.role) return null
+    return data.role as string
+  } catch {
+    return null
+  }
 }
 
 export const config = {

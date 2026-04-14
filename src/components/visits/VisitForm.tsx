@@ -4,6 +4,8 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { useGPS } from '@/hooks/useGPS'
 import { uploadPhoto } from '@/hooks/usePhotoUpload'
+import { findNearbyCompanies } from '@/hooks/useNearbyCompanies'
+import type { NearbyResult } from '@/hooks/useNearbyCompanies'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Textarea } from '@/components/ui/Textarea'
@@ -11,7 +13,7 @@ import { Select } from '@/components/ui/Select'
 import { Alert } from '@/components/ui/Alert'
 import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
-import { MapPin, Navigation, PenLine, Camera, X } from 'lucide-react'
+import { MapPin, Navigation, PenLine, Camera, X, Locate } from 'lucide-react'
 import { getTodayIso, getCurrentTimeStr } from '@/lib/utils'
 import { VISIT_STATUS_OPTIONS } from '@/components/visits/VisitStatusBadge'
 import type { Company, GPSCapture, VisitStatus } from '@/types'
@@ -30,6 +32,8 @@ export function VisitForm({ userId }: VisitFormProps) {
   const [companyInput, setCompanyInput] = useState('')
   const [selectedCompany, setSelectedCompany] = useState<Company | null>(null)
   const [showSuggestions, setShowSuggestions] = useState(false)
+  const [nearbyResults, setNearbyResults] = useState<NearbyResult[]>([])
+  const [nearbyLoading, setNearbyLoading] = useState(false)
   const [visitStatus, setVisitStatus] = useState<VisitStatus | ''>('')
   const [note, setNote] = useState('')
   const [locationMode, setLocationMode] = useState<LocationMode>('gps')
@@ -61,23 +65,34 @@ export function VisitForm({ userId }: VisitFormProps) {
     setSelectedCompany(c)
     setCompanyInput(c.name)
     setShowSuggestions(false)
+    setNearbyResults([]) // öneri kutusu kapansın
   }
 
   const handleCompanyInput = (val: string) => {
     setCompanyInput(val)
     setSelectedCompany(null)
     setShowSuggestions(val.length >= 1)
+    if (val.length >= 1) setNearbyResults([]) // yazmaya başlayınca öneri silinir
   }
 
   const handleGetLocation = async () => {
+    setNearbyResults([])
     const result = await capture()
     setGpsResult(result)
+
+    if (result.status === 'success' && companies.length > 0) {
+      setNearbyLoading(true)
+      const nearby = await findNearbyCompanies(result.latitude, result.longitude, companies)
+      setNearbyResults(nearby)
+      setNearbyLoading(false)
+    }
   }
 
   const handleModeSwitch = (mode: LocationMode) => {
     setLocationMode(mode)
     setGpsResult(null)
     setManualAddress('')
+    setNearbyResults([])
     setError(null)
   }
 
@@ -136,7 +151,6 @@ export function VisitForm({ userId }: VisitFormProps) {
 
     setSubmitting(true)
 
-    // Fotoğraf yükleme
     let photo_url: string | null = null
     if (photoFile) {
       const ext = photoFile.name.split('.').pop() ?? 'jpg'
@@ -187,34 +201,68 @@ export function VisitForm({ userId }: VisitFormProps) {
       </div>
 
       {/* Firma seçimi */}
-      <div className="relative">
-        <Input
-          label="Firma Adı"
-          value={companyInput}
-          onChange={(e) => handleCompanyInput(e.target.value)}
-          onFocus={() => companyInput.length >= 1 && setShowSuggestions(true)}
-          onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
-          placeholder="Kayıtlı firma seç veya yeni yaz..."
-          required
-        />
-        {showSuggestions && filteredCompanies.length > 0 && (
-          <div className="absolute z-10 left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
-            {filteredCompanies.map((c) => (
-              <button
-                key={c.id}
-                type="button"
-                onMouseDown={() => handleCompanySelect(c)}
-                className="w-full text-left px-4 py-2.5 text-sm hover:bg-gray-50 transition-colors"
-              >
-                {c.name}
-                {c.address && <span className="text-gray-400 text-xs ml-2">{c.address}</span>}
-              </button>
-            ))}
+      <div className="space-y-2">
+        {/* Yakın firma önerileri */}
+        {(nearbyLoading || nearbyResults.length > 0) && (
+          <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+            <p className="text-xs font-semibold text-amber-700 flex items-center gap-1 mb-2">
+              <Locate className="h-3.5 w-3.5" />
+              Konumunuza Yakın Okullar
+            </p>
+            {nearbyLoading ? (
+              <p className="text-xs text-amber-600">Yakın okullar aranıyor...</p>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {nearbyResults.map(({ company, distance, matchType }) => (
+                  <button
+                    key={company.id}
+                    type="button"
+                    onClick={() => handleCompanySelect(company)}
+                    className="flex items-center gap-1.5 bg-white border border-amber-300 rounded-full px-3 py-1.5 text-xs font-medium text-amber-800 hover:bg-amber-100 transition-colors text-left"
+                  >
+                    <span className="truncate max-w-[200px]">{company.name}</span>
+                    {matchType === 'gps' && distance != null && (
+                      <span className="text-amber-500 shrink-0">~{Math.round(distance)}m</span>
+                    )}
+                    {matchType === 'address' && (
+                      <span className="text-amber-400 shrink-0">aynı bölge</span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         )}
-        {selectedCompany && (
-          <p className="text-xs text-green-600 mt-1">✓ Kayıtlı firma seçildi</p>
-        )}
+
+        <div className="relative">
+          <Input
+            label="Firma Adı"
+            value={companyInput}
+            onChange={(e) => handleCompanyInput(e.target.value)}
+            onFocus={() => companyInput.length >= 1 && setShowSuggestions(true)}
+            onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
+            placeholder="Yakın okulu seç veya firma adı yaz..."
+            required
+          />
+          {showSuggestions && filteredCompanies.length > 0 && (
+            <div className="absolute z-10 left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+              {filteredCompanies.map((c) => (
+                <button
+                  key={c.id}
+                  type="button"
+                  onMouseDown={() => handleCompanySelect(c)}
+                  className="w-full text-left px-4 py-2.5 text-sm hover:bg-gray-50 transition-colors"
+                >
+                  {c.name}
+                  {c.address && <span className="text-gray-400 text-xs ml-2">{c.address}</span>}
+                </button>
+              ))}
+            </div>
+          )}
+          {selectedCompany && (
+            <p className="text-xs text-green-600 mt-1">✓ Kayıtlı okul/firma seçildi</p>
+          )}
+        </div>
       </div>
 
       {/* Ziyaret Durumu */}
@@ -286,13 +334,16 @@ export function VisitForm({ userId }: VisitFormProps) {
               type="button"
               variant={gpsResult?.status === 'success' ? 'secondary' : 'primary'}
               size="md"
-              loading={capturing}
+              loading={capturing || nearbyLoading}
               onClick={handleGetLocation}
               className="w-full"
             >
               <Navigation className="h-4 w-4" />
-              {gpsResult?.status === 'success' ? 'Konumu Yenile' : 'Konumu Al'}
+              {gpsResult?.status === 'success' ? 'Konumu Yenile' : 'Konumu Al → Yakın Okul Bul'}
             </Button>
+            <p className="text-xs text-gray-400 mt-2 text-center">
+              Konum alındıktan sonra yakın okullar otomatik önerilir
+            </p>
           </>
         )}
 
@@ -313,7 +364,9 @@ export function VisitForm({ userId }: VisitFormProps) {
 
       {/* Fotoğraf */}
       <Card className="p-4">
-        <p className="text-sm font-medium text-gray-700 mb-3">Ziyaret Fotoğrafı <span className="text-gray-400 font-normal">(isteğe bağlı)</span></p>
+        <p className="text-sm font-medium text-gray-700 mb-3">
+          Ziyaret Fotoğrafı <span className="text-gray-400 font-normal">(isteğe bağlı)</span>
+        </p>
 
         {photoPreview ? (
           <div className="relative">
@@ -337,7 +390,6 @@ export function VisitForm({ userId }: VisitFormProps) {
             <span className="text-sm">Fotoğraf Çek / Seç</span>
           </button>
         )}
-
         <input
           ref={photoInputRef}
           type="file"
