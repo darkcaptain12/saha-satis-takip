@@ -7,6 +7,59 @@ import { MapPin } from 'lucide-react'
 
 type GeoStatus = 'idle' | 'running' | 'stopped' | 'done'
 
+// note alanından ilçeyi çıkar: "İlçe: Gemlik | Tür: İlkokul" → "Gemlik"
+function extractDistrict(note: string | null): string | null {
+  if (!note) return null
+  const m = note.match(/İlçe:\s*([^|]+)/)
+  return m ? m[1].trim() : null
+}
+
+async function nominatimSearch(q: string): Promise<{ lat: number; lon: number } | null> {
+  try {
+    const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=tr&q=${encodeURIComponent(q)}`
+    const res = await fetch(url)
+    if (!res.ok) return null
+    const data = await res.json()
+    if (Array.isArray(data) && data.length > 0) {
+      return { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon) }
+    }
+  } catch { /* ignore */ }
+  return null
+}
+
+const delay = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))
+
+// Birden fazla sorgu dene, ilk sonucu döndür
+async function geocodeOne(
+  name: string,
+  address: string | null,
+  note: string | null,
+): Promise<{ lat: number; lon: number } | null> {
+  const district = extractDistrict(note)
+
+  // En isabetli sorgudan en geniş sorguya doğru sırala
+  const queries: string[] = []
+
+  if (district) {
+    queries.push(`${name}, ${district}, Bursa`)     // En iyi: okul adı + ilçe + şehir
+    queries.push(`${name} ${district} Bursa`)        // Alternatif format
+  }
+  queries.push(`${name}, Bursa`)                    // Şehir bazlı
+  if (address) {
+    // Adresteki "/ BURSA" gibi ekler varsa temizle
+    const cleanAddr = address.replace(/\s*\/\s*BURSA\s*$/i, '').trim()
+    queries.push(`${cleanAddr}, Bursa, Türkiye`)
+  }
+
+  for (const q of queries) {
+    const result = await nominatimSearch(q)
+    if (result) return result
+    // Nominatim rate limit: sorgular arası bekleme
+    await delay(1200)
+  }
+  return null
+}
+
 export function AdminGeocodeButton() {
   const [open, setOpen] = useState(false)
   const [status, setStatus] = useState<GeoStatus>('idle')
@@ -17,36 +70,6 @@ export function AdminGeocodeButton() {
   const [currentName, setCurrentName] = useState('')
   const abortRef = useRef(false)
 
-  const delay = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))
-
-  async function geocodeOne(
-    address: string | null,
-    name: string
-  ): Promise<{ lat: number; lon: number } | null> {
-    const queries: string[] = []
-    if (address) queries.push(`${address}, Bursa, Türkiye`)
-    queries.push(`${name}, Bursa, Türkiye`)
-
-    for (const q of queries) {
-      try {
-        const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=tr&q=${encodeURIComponent(q)}`
-        const res = await fetch(url, {
-          headers: { 'User-Agent': 'SahaSatisTakip/1.0 (contact@baski.com)' },
-        })
-        if (!res.ok) continue
-        const data = await res.json()
-        if (Array.isArray(data) && data.length > 0) {
-          return { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon) }
-        }
-      } catch {
-        // ignore, try next query
-      }
-      // rate-limit gap between retries
-      await delay(1300)
-    }
-    return null
-  }
-
   const handleStart = async () => {
     const supabase = createClient()
     abortRef.current = false
@@ -56,9 +79,10 @@ export function AdminGeocodeButton() {
     setCurrentName('')
     setStatus('running')
 
+    // note alanı da gerekli: ilçe bilgisi için
     const { data: companies, error } = await supabase
       .from('companies')
-      .select('id, name, address')
+      .select('id, name, address, note')
       .is('latitude', null)
       .order('name')
 
@@ -69,7 +93,7 @@ export function AdminGeocodeButton() {
 
     setTotal(companies.length)
 
-    for (const company of companies as { id: string; name: string; address: string | null }[]) {
+    for (const company of companies as { id: string; name: string; address: string | null; note: string | null }[]) {
       if (abortRef.current) {
         setStatus('stopped')
         return
@@ -77,7 +101,7 @@ export function AdminGeocodeButton() {
 
       setCurrentName(company.name)
 
-      const coords = await geocodeOne(company.address, company.name)
+      const coords = await geocodeOne(company.name, company.address, company.note)
 
       if (coords) {
         await supabase
@@ -90,7 +114,6 @@ export function AdminGeocodeButton() {
       }
 
       setProcessed((p) => p + 1)
-      // Nominatim rate limit: 1 req/sec — keep 1.3 s gap
       await delay(1300)
     }
 
@@ -119,13 +142,12 @@ export function AdminGeocodeButton() {
         {status === 'idle' && (
           <div className="space-y-4">
             <p className="text-sm text-gray-600">
-              Koordinatı (enlem/boylam) olmayan firmalar için adres bilgisinden otomatik
-              koordinat bulunur ve veritabanına kaydedilir. Böylece GPS yakın firma önerisi
-              daha doğru çalışır.
+              Koordinatı olmayan firmalar için okul adı + ilçe bilgisinden otomatik koordinat
+              bulunur ve veritabanına kaydedilir.
             </p>
             <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-800">
-              ⚠️ Her firma için ~1.3 saniye bekleniyor (Nominatim hız limiti).
-              İşlem sırasında bu sekmeyi kapatmayın.
+              ⚠️ 691 okul için ~15 dakika sürebilir. Bu sekmeyi kapatmayın.
+              İstediğinizde durdurabilir, daha sonra kaldığı yerden devam edebilirsiniz.
             </div>
             <div className="flex gap-3 justify-end">
               <Button variant="secondary" type="button" onClick={() => setOpen(false)}>
@@ -141,7 +163,6 @@ export function AdminGeocodeButton() {
 
         {status !== 'idle' && (
           <div className="space-y-4">
-            {/* Progress bar */}
             <div>
               <div className="flex justify-between text-sm text-gray-600 mb-1.5">
                 <span>{processed} / {total} işlendi</span>
@@ -155,7 +176,6 @@ export function AdminGeocodeButton() {
               </div>
             </div>
 
-            {/* Stats */}
             <div className="grid grid-cols-2 gap-3 text-center">
               <div className="bg-green-50 border border-green-200 rounded-lg p-3">
                 <p className="text-2xl font-bold text-green-700">{found}</p>
@@ -167,7 +187,6 @@ export function AdminGeocodeButton() {
               </div>
             </div>
 
-            {/* Current item */}
             {status === 'running' && currentName && (
               <p className="text-sm text-gray-400 truncate">
                 <span className="inline-block animate-pulse mr-1">⏳</span>
@@ -175,13 +194,12 @@ export function AdminGeocodeButton() {
               </p>
             )}
 
-            {/* Result banners */}
             {status === 'done' && (
               <div className="bg-green-50 border border-green-200 rounded-lg p-3">
                 <p className="text-sm font-semibold text-green-800">✅ İşlem tamamlandı!</p>
                 <p className="text-sm text-green-700 mt-1">
                   {found} firmaya koordinat eklendi.
-                  {notFound > 0 && ` ${notFound} firma için adres bulunamadı.`}
+                  {notFound > 0 && ` ${notFound} firma için koordinat bulunamadı.`}
                 </p>
               </div>
             )}
@@ -190,29 +208,19 @@ export function AdminGeocodeButton() {
               <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
                 <p className="text-sm text-amber-800">
                   ⏸️ Durduruldu. Kalan firmalar koordinatsız bırakıldı.
-                  İstediğinizde tekrar başlatabilirsiniz.
+                  Tekrar başlatınca kaldığı yerden devam eder.
                 </p>
               </div>
             )}
 
-            {/* Action buttons */}
             <div className="flex gap-3 justify-end">
               {status === 'running' && (
-                <Button
-                  variant="danger"
-                  type="button"
-                  onClick={() => { abortRef.current = true }}
-                >
+                <Button variant="danger" type="button" onClick={() => { abortRef.current = true }}>
                   Durdur
                 </Button>
               )}
               {(status === 'done' || status === 'stopped') && (
-                <Button
-                  onClick={() => {
-                    setOpen(false)
-                    setStatus('idle')
-                  }}
-                >
+                <Button onClick={() => { setOpen(false); setStatus('idle') }}>
                   Kapat
                 </Button>
               )}

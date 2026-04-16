@@ -44,12 +44,29 @@ export default async function BolgePlanlamaPage() {
     distanceMeters: null,
   }))
 
+  // Koordinat henüz yüklenmemişse yönlendirme mesajı göster
+  if (markers.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-64 text-center p-6 gap-4">
+        <div className="text-4xl">🗺️</div>
+        <div>
+          <p className="font-semibold text-gray-800">Harita için koordinat gerekli</p>
+          <p className="text-sm text-gray-500 mt-1">
+            Okul koordinatları henüz yüklenmemiş. Admin panelinden
+            <br />
+            <strong>Firmalar → Koordinatları Doldur</strong> butonunu çalıştırın.
+          </p>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="flex flex-col" style={{ height: 'calc(100vh - 56px - 64px)' }}>
       <div className="px-4 py-3 bg-white border-b border-gray-100">
         <h1 className="text-base font-bold text-gray-900">Bölge Planlama</h1>
         <p className="text-xs text-gray-500 mt-0.5">
-          Koordinatı olan {markers.length} firma · 🔴 Ziyaret edilmedi · 🟢 Ziyaret edildi
+          {markers.length} okul/firma · 🔴 Ziyaret edilmedi · 🟢 Ziyaret edildi
         </p>
       </div>
       <div className="flex-1 overflow-hidden">
