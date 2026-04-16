@@ -5,86 +5,72 @@ import { Modal } from '@/components/ui/Modal'
 import { createClient } from '@/lib/supabase/client'
 import { MapPin } from 'lucide-react'
 
-type GeoStatus = 'idle' | 'running' | 'stopped' | 'done'
+type GeoStatus = 'idle' | 'running' | 'done'
 
-// note alanından ilçeyi çıkar: "İlçe: Gemlik | Tür: İlkokul" → "Gemlik"
+// Bursa ilçe merkezi koordinatları
+const BURSA_DISTRICTS: Record<string, [number, number]> = {
+  'OSMANGAZİ':          [40.1885, 29.0610],
+  'NİLÜFER':            [40.2117, 28.9786],
+  'YILDIRIM':           [40.1954, 29.1108],
+  'GEMLİK':             [40.4316, 29.1538],
+  'MUDANYA':            [40.3753, 28.8828],
+  'KESTEL':             [40.1960, 29.2250],
+  'GÜRSU':              [40.2231, 29.1880],
+  'KARACABEYİ':         [40.2161, 28.3583],
+  'KARACABEY':          [40.2161, 28.3583],
+  'İNEGÖL':             [40.0762, 29.5133],
+  'INEGÖL':             [40.0762, 29.5133],
+  'MUSTAFAKEMALPAŞA':   [40.0377, 28.4091],
+  'İZNİK':              [40.4303, 29.7228],
+  'IZNIK':              [40.4303, 29.7228],
+  'ORHANELİ':           [39.9037, 28.9985],
+  'BÜYÜKORHAN':         [39.8143, 29.0278],
+  'KELES':              [39.9112, 29.2273],
+  'HARMANCIK':          [39.6737, 29.1505],
+  'ORHANGAZİ':          [40.4856, 29.3133],
+  'YENİŞEHİR':          [40.2647, 29.6450],
+}
+
+// note alanından ilçeyi çıkar: "İlçe: Gemlik | Tür: İlkokul" → "GEMLİK"
 function extractDistrict(note: string | null): string | null {
   if (!note) return null
   const m = note.match(/İlçe:\s*([^|]+)/)
-  return m ? m[1].trim() : null
+  if (!m) return null
+  return m[1].trim().toUpperCase()
+    .replace('I', 'İ') // küçük harf i → büyük İ düzeltmesi
 }
 
-async function nominatimSearch(q: string): Promise<{ lat: number; lon: number } | null> {
-  try {
-    const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=tr&q=${encodeURIComponent(q)}`
-    const res = await fetch(url)
-    if (!res.ok) return null
-    const data = await res.json()
-    if (Array.isArray(data) && data.length > 0) {
-      return { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon) }
-    }
-  } catch { /* ignore */ }
-  return null
-}
-
-const delay = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))
-
-// Birden fazla sorgu dene, ilk sonucu döndür
-async function geocodeOne(
-  name: string,
-  address: string | null,
-  note: string | null,
-): Promise<{ lat: number; lon: number } | null> {
-  const district = extractDistrict(note)
-
-  // En isabetli sorgudan en geniş sorguya doğru sırala
-  const queries: string[] = []
-
-  if (district) {
-    queries.push(`${name}, ${district}, Bursa`)     // En iyi: okul adı + ilçe + şehir
-    queries.push(`${name} ${district} Bursa`)        // Alternatif format
-  }
-  queries.push(`${name}, Bursa`)                    // Şehir bazlı
-  if (address) {
-    // Adresteki "/ BURSA" gibi ekler varsa temizle
-    const cleanAddr = address.replace(/\s*\/\s*BURSA\s*$/i, '').trim()
-    queries.push(`${cleanAddr}, Bursa, Türkiye`)
-  }
-
-  for (const q of queries) {
-    const result = await nominatimSearch(q)
-    if (result) return result
-    // Nominatim rate limit: sorgular arası bekleme
-    await delay(1200)
-  }
-  return null
+// İlçe merkezine ±offset kadar rastgele dağıtım (her okul aynı noktada olmasın)
+function withOffset(lat: number, lon: number): [number, number] {
+  const range = 0.004 // ~400m
+  const dlat = (Math.random() - 0.5) * range
+  const dlon = (Math.random() - 0.5) * range
+  return [
+    parseFloat((lat + dlat).toFixed(6)),
+    parseFloat((lon + dlon).toFixed(6)),
+  ]
 }
 
 export function AdminGeocodeButton() {
   const [open, setOpen] = useState(false)
   const [status, setStatus] = useState<GeoStatus>('idle')
   const [total, setTotal] = useState(0)
-  const [processed, setProcessed] = useState(0)
   const [found, setFound] = useState(0)
   const [notFound, setNotFound] = useState(0)
-  const [currentName, setCurrentName] = useState('')
   const abortRef = useRef(false)
 
   const handleStart = async () => {
     const supabase = createClient()
     abortRef.current = false
-    setProcessed(0)
     setFound(0)
     setNotFound(0)
-    setCurrentName('')
     setStatus('running')
 
-    // note alanı da gerekli: ilçe bilgisi için
+    // note alanı gerekli: ilçe bilgisi için
     const { data: companies, error } = await supabase
       .from('companies')
-      .select('id, name, address, note')
+      .select('id, name, note')
       .is('latitude', null)
-      .order('name')
 
     if (error || !companies || companies.length === 0) {
       setStatus('done')
@@ -93,34 +79,47 @@ export function AdminGeocodeButton() {
 
     setTotal(companies.length)
 
-    for (const company of companies as { id: string; name: string; address: string | null; note: string | null }[]) {
-      if (abortRef.current) {
-        setStatus('stopped')
-        return
-      }
+    // Toplu güncelleme: her ilçe için koordinat ata
+    const updates: { id: string; latitude: number; longitude: number }[] = []
+    let foundCount = 0
+    let notFoundCount = 0
 
-      setCurrentName(company.name)
+    for (const c of companies as { id: string; name: string; note: string | null }[]) {
+      if (abortRef.current) break
 
-      const coords = await geocodeOne(company.name, company.address, company.note)
+      const district = extractDistrict(c.note)
+      const center = district ? BURSA_DISTRICTS[district] : null
 
-      if (coords) {
-        await supabase
-          .from('companies')
-          .update({ latitude: coords.lat, longitude: coords.lon })
-          .eq('id', company.id)
-        setFound((f) => f + 1)
+      if (center) {
+        const [lat, lon] = withOffset(center[0], center[1])
+        updates.push({ id: c.id, latitude: lat, longitude: lon })
+        foundCount++
       } else {
-        setNotFound((n) => n + 1)
+        // İlçe bulunamadı → Bursa merkezi kullan
+        const [lat, lon] = withOffset(40.1885, 29.0610)
+        updates.push({ id: c.id, latitude: lat, longitude: lon })
+        notFoundCount++
       }
-
-      setProcessed((p) => p + 1)
-      await delay(1300)
     }
 
+    // 50'şer gruplar halinde DB'ye yaz
+    const BATCH = 50
+    for (let i = 0; i < updates.length; i += BATCH) {
+      const batch = updates.slice(i, i + BATCH)
+      await Promise.all(
+        batch.map((u) =>
+          supabase
+            .from('companies')
+            .update({ latitude: u.latitude, longitude: u.longitude })
+            .eq('id', u.id)
+        )
+      )
+    }
+
+    setFound(foundCount)
+    setNotFound(notFoundCount)
     setStatus('done')
   }
-
-  const progressPct = total > 0 ? Math.round((processed / total) * 100) : 0
 
   return (
     <>
@@ -137,17 +136,17 @@ export function AdminGeocodeButton() {
             setStatus('idle')
           }
         }}
-        title="Firma Koordinatları — Otomatik Doldur"
+        title="Firma Koordinatları — İlçe Bazlı Doldur"
       >
         {status === 'idle' && (
           <div className="space-y-4">
             <p className="text-sm text-gray-600">
-              Koordinatı olmayan firmalar için okul adı + ilçe bilgisinden otomatik koordinat
-              bulunur ve veritabanına kaydedilir.
+              Her okul/firma için kayıtlı <strong>ilçe bilgisi</strong> kullanılarak
+              koordinat atanır. Saniyeler içinde tüm firmalar haritada görünür.
             </p>
-            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-800">
-              ⚠️ 691 okul için ~15 dakika sürebilir. Bu sekmeyi kapatmayın.
-              İstediğinizde durdurabilir, daha sonra kaldığı yerden devam edebilirsiniz.
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-800">
+              ℹ️ Koordinatlar ilçe merkezi bazlıdır (~400m dağıtım ile).
+              Bölge planlama için yeterli hassasiyettedir.
             </div>
             <div className="flex gap-3 justify-end">
               <Button variant="secondary" type="button" onClick={() => setOpen(false)}>
@@ -161,69 +160,37 @@ export function AdminGeocodeButton() {
           </div>
         )}
 
-        {status !== 'idle' && (
-          <div className="space-y-4">
-            <div>
-              <div className="flex justify-between text-sm text-gray-600 mb-1.5">
-                <span>{processed} / {total} işlendi</span>
-                <span>%{progressPct}</span>
-              </div>
-              <div className="w-full bg-gray-100 rounded-full h-2.5">
-                <div
-                  className="bg-brand h-2.5 rounded-full transition-all duration-500"
-                  style={{ width: `${progressPct}%` }}
-                />
-              </div>
-            </div>
+        {status === 'running' && (
+          <div className="flex flex-col items-center gap-4 py-4">
+            <div className="w-10 h-10 border-4 border-brand border-t-transparent rounded-full animate-spin" />
+            <p className="text-sm text-gray-600">Koordinatlar yazılıyor...</p>
+          </div>
+        )}
 
+        {status === 'done' && (
+          <div className="space-y-4">
             <div className="grid grid-cols-2 gap-3 text-center">
               <div className="bg-green-50 border border-green-200 rounded-lg p-3">
                 <p className="text-2xl font-bold text-green-700">{found}</p>
-                <p className="text-xs text-green-600 mt-0.5">Koordinat Bulundu</p>
+                <p className="text-xs text-green-600 mt-0.5">İlçe Eşleşti</p>
               </div>
-              <div className="bg-red-50 border border-red-200 rounded-lg p-3">
-                <p className="text-2xl font-bold text-red-700">{notFound}</p>
-                <p className="text-xs text-red-600 mt-0.5">Bulunamadı</p>
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                <p className="text-2xl font-bold text-amber-700">{notFound}</p>
+                <p className="text-xs text-amber-600 mt-0.5">Bursa Merkezi Atandı</p>
               </div>
             </div>
-
-            {status === 'running' && currentName && (
-              <p className="text-sm text-gray-400 truncate">
-                <span className="inline-block animate-pulse mr-1">⏳</span>
-                {currentName}
+            <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+              <p className="text-sm font-semibold text-green-800">
+                ✅ {total} firmanın koordinatı güncellendi!
               </p>
-            )}
-
-            {status === 'done' && (
-              <div className="bg-green-50 border border-green-200 rounded-lg p-3">
-                <p className="text-sm font-semibold text-green-800">✅ İşlem tamamlandı!</p>
-                <p className="text-sm text-green-700 mt-1">
-                  {found} firmaya koordinat eklendi.
-                  {notFound > 0 && ` ${notFound} firma için koordinat bulunamadı.`}
-                </p>
-              </div>
-            )}
-
-            {status === 'stopped' && (
-              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
-                <p className="text-sm text-amber-800">
-                  ⏸️ Durduruldu. Kalan firmalar koordinatsız bırakıldı.
-                  Tekrar başlatınca kaldığı yerden devam eder.
-                </p>
-              </div>
-            )}
-
-            <div className="flex gap-3 justify-end">
-              {status === 'running' && (
-                <Button variant="danger" type="button" onClick={() => { abortRef.current = true }}>
-                  Durdur
-                </Button>
-              )}
-              {(status === 'done' || status === 'stopped') && (
-                <Button onClick={() => { setOpen(false); setStatus('idle') }}>
-                  Kapat
-                </Button>
-              )}
+              <p className="text-sm text-green-700 mt-1">
+                Bölge haritasına gidip konumunuzu alabilirsiniz.
+              </p>
+            </div>
+            <div className="flex justify-end">
+              <Button onClick={() => { setOpen(false); setStatus('idle') }}>
+                Kapat
+              </Button>
             </div>
           </div>
         )}
