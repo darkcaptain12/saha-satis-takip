@@ -20,11 +20,12 @@ import type { Company, GPSCapture, VisitStatus } from '@/types'
 
 interface VisitFormProps {
   userId: string
+  initialCompanyId?: string
 }
 
 type LocationMode = 'gps' | 'manual'
 
-export function VisitForm({ userId }: VisitFormProps) {
+export function VisitForm({ userId, initialCompanyId }: VisitFormProps) {
   const router = useRouter()
   const { capturing, capture } = useGPS()
 
@@ -53,7 +54,19 @@ export function VisitForm({ userId }: VisitFormProps) {
       .from('companies')
       .select('*')
       .order('name')
-      .then(({ data }: { data: Company[] | null }) => setCompanies(data ?? []))
+      .then(({ data }: { data: Company[] | null }) => {
+        const list = data ?? []
+        setCompanies(list)
+        // URL'den gelen company_id varsa otomatik seç
+        if (initialCompanyId) {
+          const prefill = list.find((c) => c.id === initialCompanyId)
+          if (prefill) {
+            setSelectedCompany(prefill)
+            setCompanyInput(prefill.name)
+          }
+        }
+      })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const filteredCompanies = companies.filter((c) =>

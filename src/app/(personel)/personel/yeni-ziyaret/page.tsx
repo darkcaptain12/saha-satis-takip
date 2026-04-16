@@ -2,10 +2,16 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { VisitForm } from '@/components/visits/VisitForm'
 
-export default async function YeniZiyaretPage() {
+export default async function YeniZiyaretPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ company_id?: string }>
+}) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
+
+  const { company_id: initialCompanyId } = await searchParams
 
   // Aktif hesap kontrolü
   const { data: profile } = await supabase
@@ -29,7 +35,7 @@ export default async function YeniZiyaretPage() {
         <h1 className="text-xl font-bold text-gray-900">Yeni Ziyaret Kaydı</h1>
         <p className="text-sm text-gray-500 mt-1">Ziyaret bilgilerini doldurun ve konumunuzu alın.</p>
       </div>
-      <VisitForm userId={user.id} />
+      <VisitForm userId={user.id} initialCompanyId={initialCompanyId} />
     </div>
   )
 }

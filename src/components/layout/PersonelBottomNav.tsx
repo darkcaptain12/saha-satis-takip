@@ -1,14 +1,15 @@
 'use client'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Home, PlusCircle, ClipboardList, User } from 'lucide-react'
+import { Home, PlusCircle, ClipboardList, User, Map } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 const navItems = [
-  { href: '/personel/dashboard',    label: 'Ana Sayfa',  icon: Home },
-  { href: '/personel/yeni-ziyaret', label: 'Yeni',       icon: PlusCircle },
-  { href: '/personel/ziyaretlerim', label: 'Ziyaretler', icon: ClipboardList },
-  { href: '/personel/profil',       label: 'Profil',     icon: User },
+  { href: '/personel/dashboard',      label: 'Ana Sayfa',  icon: Home },
+  { href: '/personel/yeni-ziyaret',   label: 'Yeni',       icon: PlusCircle },
+  { href: '/personel/ziyaretlerim',   label: 'Ziyaretler', icon: ClipboardList },
+  { href: '/personel/bolge-planlama', label: 'Bölge',      icon: Map },
+  { href: '/personel/profil',         label: 'Profil',     icon: User },
 ]
 
 export function PersonelBottomNav() {
