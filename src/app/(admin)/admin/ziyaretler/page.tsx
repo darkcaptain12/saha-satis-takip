@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { Card } from '@/components/ui/Card'
+import { Badge } from '@/components/ui/Badge'
 import { LocationStatusBadge } from '@/components/visits/LocationStatusBadge'
 import { VisitStatusBadge } from '@/components/visits/VisitStatusBadge'
 import { formatDate, formatTime } from '@/lib/utils'
@@ -15,6 +16,7 @@ interface PageProps {
     to?: string
     status?: string
     vstatus?: string
+    q?: string
   }>
 }
 
@@ -26,6 +28,17 @@ export default async function AdminZiyaretlerPage({ searchParams }: PageProps) {
     supabase.from('profiles').select('id, name').eq('role', 'personel').eq('active', true).order('name'),
     supabase.from('companies').select('id, name').order('name'),
   ])
+
+  // company_id'leri "siparis_alindi" statüsüne sahip ziyaretlerden çek
+  const { data: siparisVisits } = await supabase
+    .from('visits')
+    .select('company_id')
+    .eq('status', 'siparis_alindi')
+    .not('company_id', 'is', null)
+
+  const siparisCompanyIds = new Set<string>(
+    (siparisVisits ?? []).map((v: { company_id: string }) => v.company_id).filter(Boolean)
+  )
 
   let query = supabase
     .from('visits')
@@ -39,12 +52,13 @@ export default async function AdminZiyaretlerPage({ searchParams }: PageProps) {
   if (params.to)      query = query.lte('visit_date', params.to)
   if (params.status)  query = query.eq('location_status', params.status)
   if (params.vstatus) query = query.eq('status', params.vstatus)
+  if (params.q)       query = query.ilike('company_name_snapshot', `%${params.q}%`)
 
   const { data: visits } = await query.limit(200)
 
   return (
     <div className="space-y-4">
-      <AdminVisitFilters staff={staff ?? []} companies={companies ?? []} current={params} />
+      <AdminVisitFilters staff={staff ?? []} companies={companies ?? []} current={{ ...params, q: params.q }} />
 
       <Card padding={false}>
         <div className="px-6 py-3 border-b border-gray-100 flex items-center justify-between">
@@ -76,7 +90,12 @@ export default async function AdminZiyaretlerPage({ searchParams }: PageProps) {
                     <p className="text-gray-400 text-xs mt-0.5">{formatTime(v.visit_time)}</p>
                   </td>
                   <td className="px-6 py-4 text-gray-700">{v.profiles?.name}</td>
-                  <td className="px-6 py-4 text-gray-900 font-medium">{v.company_name_snapshot}</td>
+                  <td className="px-6 py-4">
+                    <p className="text-gray-900 font-medium">{v.company_name_snapshot}</p>
+                    {v.company_id && siparisCompanyIds.has(v.company_id) && (
+                      <Badge variant="green" className="mt-1 text-xs">Alım Yaptı</Badge>
+                    )}
+                  </td>
                   <td className="px-6 py-4">
                     <VisitStatusBadge status={v.status} />
                     {!v.status && <span className="text-xs text-gray-300">—</span>}
@@ -108,7 +127,12 @@ export default async function AdminZiyaretlerPage({ searchParams }: PageProps) {
             >
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
-                  <p className="font-medium text-gray-900 truncate">{v.company_name_snapshot}</p>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <p className="font-medium text-gray-900 truncate">{v.company_name_snapshot}</p>
+                    {v.company_id && siparisCompanyIds.has(v.company_id) && (
+                      <Badge variant="green" className="text-xs shrink-0">Alım Yaptı</Badge>
+                    )}
+                  </div>
                   <p className="text-xs text-gray-500 mt-0.5">
                     {v.profiles?.name} · {formatDate(v.visit_date)} {formatTime(v.visit_time)}
                   </p>

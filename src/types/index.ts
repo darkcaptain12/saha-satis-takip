@@ -38,6 +38,8 @@ export interface Visit {
   address: string | null
   status: VisitStatus | null
   photo_url: string | null
+  contact_name: string | null
+  contact_title: string | null
   created_at: string
 }
 

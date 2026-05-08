@@ -36,6 +36,8 @@ export function VisitForm({ userId, initialCompanyId }: VisitFormProps) {
   const [nearbyResults, setNearbyResults] = useState<NearbyResult[]>([])
   const [nearbyLoading, setNearbyLoading] = useState(false)
   const [visitStatus, setVisitStatus] = useState<VisitStatus | ''>('')
+  const [contactName, setContactName] = useState('')
+  const [contactTitle, setContactTitle] = useState('')
   const [note, setNote] = useState('')
   const [locationMode, setLocationMode] = useState<LocationMode>('gps')
   const [gpsResult, setGpsResult] = useState<GPSCapture | null>(null)
@@ -190,6 +192,8 @@ export function VisitForm({ userId, initialCompanyId }: VisitFormProps) {
       address,
       status: visitStatus || null,
       photo_url,
+      contact_name: contactName.trim() || null,
+      contact_title: contactTitle.trim() || null,
     }
 
     const { error: insertErr } = await createClient().from('visits').insert(visitData)
@@ -289,6 +293,22 @@ export function VisitForm({ userId, initialCompanyId }: VisitFormProps) {
           <option key={opt.value} value={opt.value}>{opt.label}</option>
         ))}
       </Select>
+
+      {/* Görüşülen Yetkili */}
+      <div className="grid grid-cols-2 gap-4">
+        <Input
+          label="Görüşülen Kişi"
+          value={contactName}
+          onChange={(e) => setContactName(e.target.value)}
+          placeholder="Ad Soyad"
+        />
+        <Input
+          label="Ünvanı"
+          value={contactTitle}
+          onChange={(e) => setContactTitle(e.target.value)}
+          placeholder="Müdür, Öğretmen..."
+        />
+      </div>
 
       {/* Not */}
       <Textarea

@@ -7,7 +7,7 @@ import { DeleteVisitButton } from '@/components/visits/DeleteVisitButton'
 import { AdminEditVisitButton } from '@/components/visits/AdminEditVisitButton'
 import { formatDate, formatTime } from '@/lib/utils'
 import { VisitMap } from '@/components/map/VisitMap'
-import { Building2, User, Clock, MapPin, FileText, Navigation2, Tag } from 'lucide-react'
+import { Building2, User, Clock, MapPin, FileText, Navigation2, Tag, UserCheck } from 'lucide-react'
 import Image from 'next/image'
 import Link from 'next/link'
 import type { Visit, Profile } from '@/types'
@@ -42,7 +42,7 @@ export default async function AdminZiyaretDetayPage({ params }: PageProps) {
           <Link href="/admin/ziyaretler" className="hover:text-brand">← Ziyaretler</Link>
         </div>
         <div className="flex gap-2">
-          <AdminEditVisitButton visit={{ id: v.id, note: v.note, status: v.status }} />
+          <AdminEditVisitButton visit={{ id: v.id, note: v.note, status: v.status, visit_date: v.visit_date, visit_time: v.visit_time }} />
           <DeleteVisitButton visitId={v.id} companyName={v.company_name_snapshot} />
         </div>
       </div>
@@ -85,6 +85,13 @@ export default async function AdminZiyaretDetayPage({ params }: PageProps) {
               label="Manuel Adres"
               value={v.address}
               multiline
+            />
+          )}
+          {(v.contact_name || v.contact_title) && (
+            <InfoRow
+              icon={<UserCheck className="h-4 w-4 text-gray-400" />}
+              label="Görüşülen Kişi"
+              value={[v.contact_name, v.contact_title].filter(Boolean).join(' — ')}
             />
           )}
           {v.note && (

@@ -5,9 +5,10 @@ import { LocationStatusBadge } from '@/components/visits/LocationStatusBadge'
 import { VisitStatusBadge } from '@/components/visits/VisitStatusBadge'
 import { VisitMap } from '@/components/map/VisitMap'
 import { formatDate, formatTime } from '@/lib/utils'
-import { Building2, Clock, MapPin, FileText, Tag, Navigation2 } from 'lucide-react'
+import { Building2, Clock, MapPin, FileText, Tag, Navigation2, UserCheck } from 'lucide-react'
 import Image from 'next/image'
 import Link from 'next/link'
+import { PersonelEditVisitButton } from '@/components/visits/PersonelEditVisitButton'
 import type { Visit } from '@/types'
 
 interface PageProps {
@@ -41,9 +42,13 @@ export default async function PersonelZiyaretDetayPage({ params }: PageProps) {
       <Card>
         <div className="flex items-start justify-between mb-5 gap-4 flex-wrap">
           <h2 className="text-lg font-bold text-gray-900">{v.company_name_snapshot}</h2>
-          <div className="flex gap-2 flex-wrap">
+          <div className="flex gap-2 flex-wrap items-center">
             {v.status && <VisitStatusBadge status={v.status} />}
             <LocationStatusBadge status={v.location_status} />
+            <PersonelEditVisitButton
+              visit={{ id: v.id, note: v.note, status: v.status, visit_date: v.visit_date, contact_name: v.contact_name, contact_title: v.contact_title }}
+              userId={user.id}
+            />
           </div>
         </div>
 
@@ -75,6 +80,13 @@ export default async function PersonelZiyaretDetayPage({ params }: PageProps) {
               label="Adres"
               value={v.address}
               multiline
+            />
+          )}
+          {(v.contact_name || v.contact_title) && (
+            <InfoRow
+              icon={<UserCheck className="h-4 w-4 text-gray-400" />}
+              label="Görüşülen Kişi"
+              value={[v.contact_name, v.contact_title].filter(Boolean).join(' — ')}
             />
           )}
           {v.note && (

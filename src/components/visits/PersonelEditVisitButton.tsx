@@ -12,17 +12,19 @@ import { Pencil } from 'lucide-react'
 import { VISIT_STATUS_OPTIONS } from '@/components/visits/VisitStatusBadge'
 import type { Visit, VisitStatus } from '@/types'
 
-interface AdminEditVisitButtonProps {
-  visit: Pick<Visit, 'id' | 'note' | 'status' | 'visit_date' | 'visit_time'>
+interface PersonelEditVisitButtonProps {
+  visit: Pick<Visit, 'id' | 'note' | 'status' | 'visit_date' | 'contact_name' | 'contact_title'>
+  userId: string
 }
 
-export function AdminEditVisitButton({ visit }: AdminEditVisitButtonProps) {
+export function PersonelEditVisitButton({ visit, userId }: PersonelEditVisitButtonProps) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
   const [note, setNote] = useState(visit.note ?? '')
   const [status, setStatus] = useState<VisitStatus | ''>(visit.status ?? '')
   const [visitDate, setVisitDate] = useState(visit.visit_date)
-  const [visitTime, setVisitTime] = useState(visit.visit_time)
+  const [contactName, setContactName] = useState(visit.contact_name ?? '')
+  const [contactTitle, setContactTitle] = useState(visit.contact_title ?? '')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -30,7 +32,8 @@ export function AdminEditVisitButton({ visit }: AdminEditVisitButtonProps) {
     setNote(visit.note ?? '')
     setStatus(visit.status ?? '')
     setVisitDate(visit.visit_date)
-    setVisitTime(visit.visit_time)
+    setContactName(visit.contact_name ?? '')
+    setContactTitle(visit.contact_title ?? '')
     setError(null)
     setOpen(true)
   }
@@ -45,9 +48,11 @@ export function AdminEditVisitButton({ visit }: AdminEditVisitButtonProps) {
         note: note.trim() || null,
         status: status || null,
         visit_date: visitDate,
-        visit_time: visitTime,
+        contact_name: contactName.trim() || null,
+        contact_title: contactTitle.trim() || null,
       })
       .eq('id', visit.id)
+      .eq('user_id', userId)
 
     if (err) {
       setError(err.message)
@@ -75,20 +80,12 @@ export function AdminEditVisitButton({ visit }: AdminEditVisitButtonProps) {
         <div className="space-y-4">
           {error && <Alert variant="error">{error}</Alert>}
 
-          <div className="grid grid-cols-2 gap-3">
-            <Input
-              label="Tarih"
-              type="date"
-              value={visitDate}
-              onChange={(e) => setVisitDate(e.target.value)}
-            />
-            <Input
-              label="Saat"
-              type="time"
-              value={visitTime}
-              onChange={(e) => setVisitTime(e.target.value)}
-            />
-          </div>
+          <Input
+            label="Tarih"
+            type="date"
+            value={visitDate}
+            onChange={(e) => setVisitDate(e.target.value)}
+          />
 
           <Select
             label="Ziyaret Durumu"
@@ -101,12 +98,27 @@ export function AdminEditVisitButton({ visit }: AdminEditVisitButtonProps) {
             ))}
           </Select>
 
+          <div className="grid grid-cols-2 gap-3">
+            <Input
+              label="Görüşülen Kişi"
+              value={contactName}
+              onChange={(e) => setContactName(e.target.value)}
+              placeholder="Ad Soyad"
+            />
+            <Input
+              label="Ünvanı"
+              value={contactTitle}
+              onChange={(e) => setContactTitle(e.target.value)}
+              placeholder="Müdür, Öğretmen..."
+            />
+          </div>
+
           <Textarea
             label="Ziyaret Notu"
             value={note}
             onChange={(e) => setNote(e.target.value)}
             placeholder="Görüşme özeti, teklifler, sonraki adımlar..."
-            rows={5}
+            rows={4}
           />
 
           <div className="flex gap-2 pt-1">

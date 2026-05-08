@@ -19,6 +19,7 @@ interface AdminVisitFiltersProps {
     to?: string
     status?: string
     vstatus?: string
+    q?: string
   }
 }
 
@@ -59,6 +60,11 @@ export function AdminVisitFilters({ staff, companies, current }: AdminVisitFilte
         <Button variant="ghost" size="sm" onClick={clearFilters}>Temizle</Button>
       </div>
       <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-7 gap-3">
+        <Input
+          placeholder="Okul adı ara..."
+          value={current.q ?? ''}
+          onChange={(e) => push({ q: e.target.value || undefined })}
+        />
         <Select
           placeholder="Tüm Personel"
           value={current.staff ?? ''}
