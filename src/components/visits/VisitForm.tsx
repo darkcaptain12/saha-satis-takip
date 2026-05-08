@@ -48,8 +48,8 @@ export function VisitForm({ userId, initialCompanyId }: VisitFormProps) {
   const [error, setError] = useState<string | null>(null)
   const photoInputRef = useRef<HTMLInputElement>(null)
 
-  const todayStr = getTodayIso()
-  const timeRef = useRef(getCurrentTimeStr())
+  const [visitDate, setVisitDate] = useState(getTodayIso())
+  const [visitTime, setVisitTime] = useState(getCurrentTimeStr())
 
   useEffect(() => {
     createClient()
@@ -183,8 +183,8 @@ export function VisitForm({ userId, initialCompanyId }: VisitFormProps) {
       company_id: selectedCompany?.id ?? null,
       company_name_snapshot: companyInput.trim(),
       note: note.trim() || null,
-      visit_date: todayStr,
-      visit_time: timeRef.current,
+      visit_date: visitDate,
+      visit_time: visitTime,
       latitude,
       longitude,
       accuracy,
@@ -213,8 +213,8 @@ export function VisitForm({ userId, initialCompanyId }: VisitFormProps) {
 
       {/* Tarih ve Saat */}
       <div className="grid grid-cols-2 gap-4">
-        <Input label="Tarih" value={todayStr} readOnly className="bg-gray-50" />
-        <Input label="Saat" value={timeRef.current} readOnly className="bg-gray-50" />
+        <Input label="Tarih" type="date" value={visitDate} onChange={(e) => setVisitDate(e.target.value)} />
+        <Input label="Saat" type="time" value={visitTime} onChange={(e) => setVisitTime(e.target.value)} />
       </div>
 
       {/* Firma seçimi */}

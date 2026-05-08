@@ -61,6 +61,11 @@ export function getMonthRange(): { from: string; to: string } {
   }
 }
 
+export function getYearRange(): { from: string; to: string } {
+  const year = new Date().getFullYear()
+  return { from: `${year}-01-01`, to: `${year}-12-31` }
+}
+
 export function locationStatusLabel(status: string): string {
   const map: Record<string, string> = {
     success: 'Alındı',

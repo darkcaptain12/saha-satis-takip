@@ -4,7 +4,7 @@ import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Select } from '@/components/ui/Select'
 import { Input } from '@/components/ui/Input'
-import { getTodayIso, getWeekRange, getMonthRange } from '@/lib/utils'
+import { getTodayIso, getWeekRange, getMonthRange, getYearRange } from '@/lib/utils'
 
 interface Profile { id: string; name: string }
 interface Company { id: string; name: string }
@@ -36,15 +36,18 @@ export function AdminVisitFilters({ staff, companies, current }: AdminVisitFilte
     router.push(`${pathname}?${params.toString()}`)
   }
 
-  const setQuickFilter = (range: 'today' | 'week' | 'month') => {
+  const setQuickFilter = (range: 'today' | 'week' | 'month' | 'year') => {
     if (range === 'today') {
       const today = getTodayIso()
       push({ from: today, to: today })
     } else if (range === 'week') {
       const { from, to } = getWeekRange()
       push({ from, to })
-    } else {
+    } else if (range === 'month') {
       const { from, to } = getMonthRange()
+      push({ from, to })
+    } else {
+      const { from, to } = getYearRange()
       push({ from, to })
     }
   }
@@ -57,6 +60,7 @@ export function AdminVisitFilters({ staff, companies, current }: AdminVisitFilte
         <Button variant="secondary" size="sm" onClick={() => setQuickFilter('today')}>Bugün</Button>
         <Button variant="secondary" size="sm" onClick={() => setQuickFilter('week')}>Bu Hafta</Button>
         <Button variant="secondary" size="sm" onClick={() => setQuickFilter('month')}>Bu Ay</Button>
+        <Button variant="secondary" size="sm" onClick={() => setQuickFilter('year')}>Bu Yıl</Button>
         <Button variant="ghost" size="sm" onClick={clearFilters}>Temizle</Button>
       </div>
       <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-7 gap-3">

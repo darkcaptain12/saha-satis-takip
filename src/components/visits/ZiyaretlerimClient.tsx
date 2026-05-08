@@ -1,6 +1,7 @@
 'use client'
 import { useState } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
+import { createClient } from '@/lib/supabase/client'
 import { Card } from '@/components/ui/Card'
 import { Input } from '@/components/ui/Input'
 import { Select } from '@/components/ui/Select'
@@ -8,8 +9,8 @@ import { Button } from '@/components/ui/Button'
 import { LocationStatusBadge } from '@/components/visits/LocationStatusBadge'
 import { VisitStatusBadge } from '@/components/visits/VisitStatusBadge'
 import { EmptyState } from '@/components/ui/EmptyState'
-import { formatDate, formatTime } from '@/lib/utils'
-import { ClipboardList, SlidersHorizontal, X } from 'lucide-react'
+import { formatDate, formatTime, getTodayIso, getWeekRange, getMonthRange, getYearRange } from '@/lib/utils'
+import { ClipboardList, SlidersHorizontal, X, CheckCircle2 } from 'lucide-react'
 import Link from 'next/link'
 import type { Visit } from '@/types'
 
@@ -23,7 +24,6 @@ interface Props {
   }
 }
 
-// Tarihe göre grupla
 function groupByDate(visits: Visit[]): Record<string, Visit[]> {
   const grouped: Record<string, Visit[]> = {}
   visits.forEach((v) => {
@@ -33,10 +33,12 @@ function groupByDate(visits: Visit[]): Record<string, Visit[]> {
   return grouped
 }
 
-export function ZiyaretlerimClient({ visits, current }: Props) {
+export function ZiyaretlerimClient({ visits: initialVisits, current }: Props) {
   const router = useRouter()
   const pathname = usePathname()
   const [filterOpen, setFilterOpen] = useState(false)
+  const [visits, setVisits] = useState<Visit[]>(initialVisits)
+  const [togglingId, setTogglingId] = useState<string | null>(null)
 
   const hasFilters = !!(current.q || current.from || current.to || current.status)
 
@@ -48,6 +50,48 @@ export function ZiyaretlerimClient({ visits, current }: Props) {
   }
 
   const clearFilters = () => router.push(pathname)
+
+  const setQuick = (range: 'today' | 'week' | 'month' | 'year') => {
+    if (range === 'today') {
+      const t = getTodayIso()
+      push({ from: t, to: t })
+    } else if (range === 'week') {
+      push(getWeekRange())
+    } else if (range === 'month') {
+      push(getMonthRange())
+    } else {
+      push(getYearRange())
+    }
+    setFilterOpen(false)
+  }
+
+  const handleSiparisToggle = async (e: React.MouseEvent, visit: Visit) => {
+    e.preventDefault()
+    e.stopPropagation()
+    if (togglingId) return
+
+    const newStatus = visit.status === 'siparis_alindi' ? null : 'siparis_alindi'
+    setTogglingId(visit.id)
+
+    setVisits((prev) =>
+      prev.map((v) => v.id === visit.id ? { ...v, status: newStatus } : v)
+    )
+
+    const { error } = await createClient()
+      .from('visits')
+      .update({ status: newStatus })
+      .eq('id', visit.id)
+
+    if (error) {
+      // rollback
+      setVisits((prev) =>
+        prev.map((v) => v.id === visit.id ? { ...v, status: visit.status } : v)
+      )
+    }
+
+    setTogglingId(null)
+    router.refresh()
+  }
 
   const grouped = groupByDate(visits)
 
@@ -91,42 +135,72 @@ export function ZiyaretlerimClient({ visits, current }: Props) {
       {/* Filtre paneli */}
       {filterOpen && (
         <Card className="p-4 space-y-3">
-          <Input
-            placeholder="Firma adında ara..."
-            value={current.q ?? ''}
-            onChange={(e) => push({ q: e.target.value || undefined })}
-          />
-          <div className="grid grid-cols-2 gap-3">
-            <Input
-              type="date"
-              label="Başlangıç"
-              value={current.from ?? ''}
-              onChange={(e) => push({ from: e.target.value || undefined })}
-            />
-            <Input
-              type="date"
-              label="Bitiş"
-              value={current.to ?? ''}
-              onChange={(e) => push({ to: e.target.value || undefined })}
-            />
+          {/* Hızlı filtreler */}
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={() => setQuick('today')}
+              className="px-3 py-1.5 rounded-lg text-xs font-medium bg-gray-100 text-gray-700 hover:bg-brand hover:text-white transition-colors"
+            >
+              Bugün
+            </button>
+            <button
+              onClick={() => setQuick('week')}
+              className="px-3 py-1.5 rounded-lg text-xs font-medium bg-gray-100 text-gray-700 hover:bg-brand hover:text-white transition-colors"
+            >
+              Bu Hafta
+            </button>
+            <button
+              onClick={() => setQuick('month')}
+              className="px-3 py-1.5 rounded-lg text-xs font-medium bg-gray-100 text-gray-700 hover:bg-brand hover:text-white transition-colors"
+            >
+              Bu Ay
+            </button>
+            <button
+              onClick={() => setQuick('year')}
+              className="px-3 py-1.5 rounded-lg text-xs font-medium bg-gray-100 text-gray-700 hover:bg-brand hover:text-white transition-colors"
+            >
+              Bu Yıl
+            </button>
           </div>
-          <Select
-            placeholder="Ziyaret Durumu"
-            value={current.status ?? ''}
-            onChange={(e) => push({ status: e.target.value || undefined })}
-          >
-            <option value="gorusuldu">Görüşüldü</option>
-            <option value="teklif_verildi">Teklif Verildi</option>
-            <option value="takip_gerekli">Takip Gerekli</option>
-            <option value="siparis_alindi">Sipariş Alındı</option>
-          </Select>
-          <div className="flex gap-2 pt-1">
-            <Button size="sm" variant="ghost" onClick={clearFilters} className="flex-1">
-              Temizle
-            </Button>
-            <Button size="sm" onClick={() => setFilterOpen(false)} className="flex-1">
-              Uygula
-            </Button>
+
+          <div className="border-t border-gray-100 pt-3 space-y-3">
+            <Input
+              placeholder="Firma adında ara..."
+              value={current.q ?? ''}
+              onChange={(e) => push({ q: e.target.value || undefined })}
+            />
+            <div className="grid grid-cols-2 gap-3">
+              <Input
+                type="date"
+                label="Başlangıç"
+                value={current.from ?? ''}
+                onChange={(e) => push({ from: e.target.value || undefined })}
+              />
+              <Input
+                type="date"
+                label="Bitiş"
+                value={current.to ?? ''}
+                onChange={(e) => push({ to: e.target.value || undefined })}
+              />
+            </div>
+            <Select
+              placeholder="Ziyaret Durumu"
+              value={current.status ?? ''}
+              onChange={(e) => push({ status: e.target.value || undefined })}
+            >
+              <option value="gorusuldu">Görüşüldü</option>
+              <option value="teklif_verildi">Teklif Verildi</option>
+              <option value="takip_gerekli">Takip Gerekli</option>
+              <option value="siparis_alindi">Sipariş Alındı</option>
+            </Select>
+            <div className="flex gap-2 pt-1">
+              <Button size="sm" variant="ghost" onClick={clearFilters} className="flex-1">
+                Temizle
+              </Button>
+              <Button size="sm" onClick={() => setFilterOpen(false)} className="flex-1">
+                Uygula
+              </Button>
+            </div>
           </div>
         </Card>
       )}
@@ -173,8 +247,23 @@ export function ZiyaretlerimClient({ visits, current }: Props) {
                 <Link
                   key={v.id}
                   href={`/personel/ziyaretlerim/${v.id}`}
-                  className="flex items-center justify-between px-5 py-4 hover:bg-gray-50 active:bg-gray-100"
+                  className="flex items-center gap-3 px-4 py-4 hover:bg-gray-50 active:bg-gray-100"
                 >
+                  {/* Sipariş Alındı tiki */}
+                  <button
+                    type="button"
+                    onClick={(e) => handleSiparisToggle(e, v)}
+                    disabled={togglingId === v.id}
+                    className={`shrink-0 w-7 h-7 rounded-full border-2 flex items-center justify-center transition-colors ${
+                      v.status === 'siparis_alindi'
+                        ? 'bg-green-500 border-green-500 text-white'
+                        : 'border-gray-300 text-transparent hover:border-green-400'
+                    }`}
+                    title={v.status === 'siparis_alindi' ? 'Sipariş alındı — kaldırmak için tıkla' : 'Sipariş alındı olarak işaretle'}
+                  >
+                    <CheckCircle2 className="h-4 w-4" />
+                  </button>
+
                   <div className="min-w-0 flex-1">
                     <p className="font-medium text-gray-900 truncate">{v.company_name_snapshot}</p>
                     <p className="text-xs text-gray-400 mt-0.5">{formatTime(v.visit_time)}</p>
@@ -182,8 +271,8 @@ export function ZiyaretlerimClient({ visits, current }: Props) {
                       <p className="text-xs text-gray-500 mt-1 line-clamp-1">{v.note}</p>
                     )}
                   </div>
-                  <div className="ml-3 shrink-0 flex flex-col items-end gap-1">
-                    {v.status && <VisitStatusBadge status={v.status} />}
+                  <div className="ml-1 shrink-0 flex flex-col items-end gap-1">
+                    {v.status && v.status !== 'siparis_alindi' && <VisitStatusBadge status={v.status} />}
                     <LocationStatusBadge status={v.location_status} />
                   </div>
                 </Link>
