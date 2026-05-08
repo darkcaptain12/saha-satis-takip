@@ -4,7 +4,7 @@ interface StatCardProps {
   title: string
   value: number | string
   icon: React.ReactNode
-  color?: 'blue' | 'green' | 'purple' | 'orange'
+  color?: 'blue' | 'green' | 'purple' | 'orange' | 'gray'
   subtitle?: string
 }
 
@@ -13,6 +13,7 @@ const colors = {
   green:  'bg-green-50 text-green-600',
   purple: 'bg-purple-50 text-purple-600',
   orange: 'bg-orange-50 text-orange-600',
+  gray:   'bg-gray-100 text-gray-600',
 }
 
 export function StatCard({ title, value, icon, color = 'blue', subtitle }: StatCardProps) {

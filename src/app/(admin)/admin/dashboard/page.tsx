@@ -3,7 +3,7 @@ import { StatCard } from '@/components/dashboard/StatCard'
 import { Card } from '@/components/ui/Card'
 import { LocationStatusBadge } from '@/components/visits/LocationStatusBadge'
 import { formatDate, formatTime } from '@/lib/utils'
-import { Users, MapPin, Calendar } from 'lucide-react'
+import { Users, MapPin, Calendar, ClipboardList } from 'lucide-react'
 import Link from 'next/link'
 import type { VisitWithProfile } from '@/types'
 
@@ -23,6 +23,7 @@ export default async function AdminDashboardPage() {
     { count: todayCount },
     { count: weekCount },
     { count: monthCount },
+    { count: totalCount },
     { count: staffCount },
     { count: companyCount },
     { data: recentVisits },
@@ -30,6 +31,7 @@ export default async function AdminDashboardPage() {
     supabase.from('visits').select('*', { count: 'exact', head: true }).eq('visit_date', today),
     supabase.from('visits').select('*', { count: 'exact', head: true }).gte('visit_date', weekStart),
     supabase.from('visits').select('*', { count: 'exact', head: true }).gte('visit_date', monthStart),
+    supabase.from('visits').select('*', { count: 'exact', head: true }),
     supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('role', 'personel').eq('active', true),
     supabase.from('companies').select('*', { count: 'exact', head: true }),
     supabase.from('visits')
@@ -41,10 +43,11 @@ export default async function AdminDashboardPage() {
   return (
     <div className="space-y-6">
       {/* İstatistik kartları */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
         <StatCard title="Bugün" value={todayCount ?? 0} icon={<Calendar className="h-5 w-5" />} color="blue" subtitle="ziyaret kaydı" />
         <StatCard title="Bu Hafta" value={weekCount ?? 0} icon={<MapPin className="h-5 w-5" />} color="green" subtitle="ziyaret kaydı" />
         <StatCard title="Bu Ay" value={monthCount ?? 0} icon={<BarChartIcon />} color="purple" subtitle="ziyaret kaydı" />
+        <StatCard title="Toplam" value={totalCount ?? 0} icon={<ClipboardList className="h-5 w-5" />} color="gray" subtitle="tüm ziyaretler" />
         <StatCard title="Aktif Personel" value={staffCount ?? 0} icon={<Users className="h-5 w-5" />} color="orange" subtitle={`/ ${companyCount ?? 0} firma`} />
       </div>
 
