@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { AdminSidebar } from '@/components/layout/AdminSidebar'
 import { AdminHeader } from '@/components/layout/AdminHeader'
 import { AdminBottomNav } from '@/components/layout/AdminBottomNav'
+import { UpdateNoticeModal } from '@/components/ui/UpdateNoticeModal'
 import { usePathname } from 'next/navigation'
 
 const pageTitles: Record<string, string> = {
@@ -39,6 +40,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         </main>
       </div>
       <AdminBottomNav onMenuClick={() => setSidebarOpen(true)} />
+      <UpdateNoticeModal />
     </div>
   )
 }

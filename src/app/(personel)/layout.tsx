@@ -1,6 +1,7 @@
 'use client'
 import { PersonelHeader } from '@/components/layout/PersonelHeader'
 import { PersonelBottomNav } from '@/components/layout/PersonelBottomNav'
+import { UpdateNoticeModal } from '@/components/ui/UpdateNoticeModal'
 
 export default function PersonelLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -10,6 +11,7 @@ export default function PersonelLayout({ children }: { children: React.ReactNode
         {children}
       </main>
       <PersonelBottomNav />
+      <UpdateNoticeModal />
     </div>
   )
 }
