@@ -83,6 +83,15 @@ create index if not exists idx_visits_location
 create index if not exists idx_companies_name
   on public.companies(name);
 
+create index if not exists idx_visits_status
+  on public.visits(status);
+
+create index if not exists idx_visits_location_status
+  on public.visits(location_status);
+
+create index if not exists idx_profiles_role
+  on public.profiles(role);
+
 -- ============================================================
 -- FUNCTION + TRIGGER: Yeni kullanıcı kaydında profil oluştur
 -- ============================================================

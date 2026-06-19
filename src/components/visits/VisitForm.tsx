@@ -54,7 +54,7 @@ export function VisitForm({ userId, initialCompanyId }: VisitFormProps) {
   useEffect(() => {
     createClient()
       .from('companies')
-      .select('*')
+      .select('id, name, address, latitude, longitude')
       .order('name')
       .then(({ data }: { data: Company[] | null }) => {
         const list = data ?? []

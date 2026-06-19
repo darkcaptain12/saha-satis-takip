@@ -9,20 +9,17 @@ import { Building2 } from 'lucide-react'
 export default async function AdminFirmalarPage() {
   const supabase = await createClient()
 
-  const { data: companies } = await supabase
-    .from('companies')
-    .select('*')
-    .order('name')
-
-  // Firma başına ziyaret sayısı
-  const { data: visitCounts } = await supabase
-    .from('visits')
-    .select('company_id')
-    .not('company_id', 'is', null)
+  const [{ data: companies }, { data: visitCounts }] = await Promise.all([
+    supabase
+      .from('companies')
+      .select('id, name, address, phone, note, latitude, longitude, created_at')
+      .order('name'),
+    supabase.rpc('get_company_visit_counts'),
+  ])
 
   const countMap: Record<string, number> = {}
-  visitCounts?.forEach((v: { company_id: string | null }) => {
-    if (v.company_id) countMap[v.company_id] = (countMap[v.company_id] ?? 0) + 1
+  ;(visitCounts ?? []).forEach((r: { company_id: string; visit_count: number }) => {
+    countMap[r.company_id] = Number(r.visit_count)
   })
 
   return (

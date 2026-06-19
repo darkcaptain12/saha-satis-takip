@@ -1,4 +1,5 @@
 'use client'
+import { useRef, useState } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
@@ -26,6 +27,8 @@ interface AdminVisitFiltersProps {
 export function AdminVisitFilters({ staff, companies, current }: AdminVisitFiltersProps) {
   const router = useRouter()
   const pathname = usePathname()
+  const [localQ, setLocalQ] = useState(current.q ?? '')
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const push = (updates: Record<string, string | undefined>) => {
     const params = new URLSearchParams()
@@ -52,7 +55,18 @@ export function AdminVisitFilters({ staff, companies, current }: AdminVisitFilte
     }
   }
 
-  const clearFilters = () => router.push(pathname)
+  const clearFilters = () => {
+    setLocalQ('')
+    router.push(pathname)
+  }
+
+  const handleQChange = (val: string) => {
+    setLocalQ(val)
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    debounceRef.current = setTimeout(() => {
+      push({ q: val || undefined })
+    }, 400)
+  }
 
   return (
     <Card className="p-4">
@@ -66,8 +80,8 @@ export function AdminVisitFilters({ staff, companies, current }: AdminVisitFilte
       <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-7 gap-3">
         <Input
           placeholder="Okul adı ara..."
-          value={current.q ?? ''}
-          onChange={(e) => push({ q: e.target.value || undefined })}
+          value={localQ}
+          onChange={(e) => handleQChange(e.target.value)}
         />
         <Select
           placeholder="Tüm Personel"

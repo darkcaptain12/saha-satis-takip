@@ -37,24 +37,23 @@ export async function middleware(request: NextRequest) {
 
   // Giriş yapmış + /login açıyor → dashboard'a yönlendir
   if (user && pathname === '/login') {
-    const role = await getUserRole(supabase, user.id)
-    if (role === null) return response // DB hatası → yönlendirme yapma
+    const role = await resolveRole(supabase, user)
+    if (role === null) return response
     const dest = role === 'admin' ? '/admin/dashboard' : '/personel/dashboard'
     return NextResponse.redirect(new URL(dest, request.url))
   }
 
   // Kök yol → dashboard'a yönlendir
   if (user && pathname === '/') {
-    const role = await getUserRole(supabase, user.id)
-    if (role === null) return response // DB hatası → yönlendirme yapma
+    const role = await resolveRole(supabase, user)
+    if (role === null) return response
     const dest = role === 'admin' ? '/admin/dashboard' : '/personel/dashboard'
     return NextResponse.redirect(new URL(dest, request.url))
   }
 
   // /admin/* → sadece admin erişebilir
   if (pathname.startsWith('/admin')) {
-    const role = await getUserRole(supabase, user!.id)
-    // DB sorgusu başarısız olduysa mevcut sayfada kal — adminı yanlış yere atma
+    const role = await resolveRole(supabase, user!)
     if (role === null) return response
     if (role !== 'admin') {
       return NextResponse.redirect(new URL('/personel/dashboard', request.url))
@@ -63,8 +62,7 @@ export async function middleware(request: NextRequest) {
 
   // /personel/* → sadece personel erişebilir
   if (pathname.startsWith('/personel')) {
-    const role = await getUserRole(supabase, user!.id)
-    // DB sorgusu başarısız olduysa mevcut sayfada kal — personeli yanlış yere atma
+    const role = await resolveRole(supabase, user!)
     if (role === null) return response
     if (role !== 'personel') {
       return NextResponse.redirect(new URL('/admin/dashboard', request.url))
@@ -75,12 +73,19 @@ export async function middleware(request: NextRequest) {
 }
 
 /**
- * Kullanıcı rolünü DB'den alır.
- * Ağ hatası / timeout / geçici DB sorunu durumunda null döner.
- * null gelince middleware hiç yönlendirme yapmaz — böylece
- * mobilde uygulama arka planda beklerken oluşan geçici hata
- * adminı yanlışlıkla personel paneline atmaz.
+ * Kullanıcı rolünü belirler.
+ * 1. Hızlı yol: JWT user_metadata.role — DB çağrısı YOK.
+ *    Bu sistem üzerinden oluşturulan tüm kullanıcılarda mevcuttur.
+ * 2. Yavaş yol (fallback): DB'den profiles.role oku.
+ *    SQL ile elle oluşturulan hesaplar veya metadata eksikse devreye girer.
  */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function resolveRole(supabase: any, user: any): Promise<string | null> {
+  const metaRole = user?.user_metadata?.role as string | undefined
+  if (metaRole === 'admin' || metaRole === 'personel') return metaRole
+  return await getUserRole(supabase, user.id)
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function getUserRole(supabase: any, userId: string): Promise<string | null> {
   try {

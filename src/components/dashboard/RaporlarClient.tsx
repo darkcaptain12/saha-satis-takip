@@ -3,7 +3,7 @@ import { useState, useMemo } from 'react'
 import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { StatCard } from '@/components/dashboard/StatCard'
-import { formatTime, getWeekRange, getMonthRange, getTodayIso } from '@/lib/utils'
+import { getWeekRange, getMonthRange, getTodayIso } from '@/lib/utils'
 import { Download, BarChart3, Users, Building2 } from 'lucide-react'
 import type { VisitWithProfile } from '@/types'
 
@@ -16,6 +16,7 @@ type Range = 'week' | 'month' | 'all'
 
 export function RaporlarClient({ visits }: Props) {
   const [range, setRange] = useState<Range>('month')
+  const [exporting, setExporting] = useState(false)
 
   const filtered = useMemo(() => {
     if (range === 'all') return visits
@@ -23,7 +24,6 @@ export function RaporlarClient({ visits }: Props) {
     return visits.filter(v => v.visit_date >= from && v.visit_date <= to)
   }, [visits, range])
 
-  // Personel bazlı özet
   const staffSummary = useMemo(() => {
     const map: Record<string, { name: string; count: number }> = {}
     filtered.forEach((v) => {
@@ -34,7 +34,6 @@ export function RaporlarClient({ visits }: Props) {
     return Object.values(map).sort((a, b) => b.count - a.count)
   }, [filtered])
 
-  // Firma bazlı özet
   const companySummary = useMemo(() => {
     const map: Record<string, number> = {}
     filtered.forEach((v) => {
@@ -46,48 +45,49 @@ export function RaporlarClient({ visits }: Props) {
       .slice(0, 10)
   }, [filtered])
 
-  const statusLabel = (s: string | null) => {
-    if (s === 'gorusuldu') return 'Görüşüldü'
-    if (s === 'teklif_verildi') return 'Teklif Verildi'
-    if (s === 'takip_gerekli') return 'Takip Gerekli'
-    if (s === 'siparis_alindi') return 'Sipariş Alındı'
-    return ''
-  }
+  const exportCSV = async () => {
+    setExporting(true)
+    try {
+      const params = new URLSearchParams()
+      if (range === 'week') {
+        const { from, to } = getWeekRange()
+        params.set('from', from)
+        params.set('to', to)
+      } else if (range === 'month') {
+        const { from } = getMonthRange()
+        params.set('from', from)
+        params.set('to', getTodayIso())
+      }
+      // range === 'all' → tarih filtresi yok, sistemdeki tüm ziyaretler
 
-  const exportCSV = () => {
-    const rows = [
-      ['Tarih', 'Saat', 'Personel', 'Firma', 'Ziyaret Durumu', 'Not', 'Konum Durumu'],
-      ...filtered.map((v) => [
-        v.visit_date,
-        formatTime(v.visit_time),
-        v.profiles?.name ?? '',
-        v.company_name_snapshot,
-        statusLabel(v.status),
-        v.note?.replace(/\n/g, ' ') ?? '',
-        v.location_status === 'success' ? 'Alındı' : v.location_status === 'failed' ? 'Alınamadı' : v.location_status === 'manual' ? 'Manuel Adres' : 'Atlandı',
-      ]),
-    ]
-    const csv = '\uFEFF' + rows.map((r) => r.map((c) => `"${c}"`).join(',')).join('\n')
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `ziyaretler_${getTodayIso()}.csv`
-    a.click()
-    URL.revokeObjectURL(url)
+      const res = await fetch(`/api/admin/export-csv?${params.toString()}`)
+      if (!res.ok) throw new Error('Export hatası')
+
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `ziyaretler_${getTodayIso()}.csv`
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch {
+      alert('CSV indirilemedi, lütfen tekrar deneyin.')
+    } finally {
+      setExporting(false)
+    }
   }
 
   const rangeLabels: Record<Range, string> = {
     week: 'Bu Hafta',
     month: 'Bu Ay',
-    all: 'Tümü',
+    all: 'Tümü (Tüm Zamanlar)',
   }
 
   return (
     <div className="space-y-6">
       {/* Filtre + Export */}
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           {(Object.keys(rangeLabels) as Range[]).map((r) => (
             <button
               key={r}
@@ -102,9 +102,9 @@ export function RaporlarClient({ visits }: Props) {
             </button>
           ))}
         </div>
-        <Button variant="secondary" size="sm" onClick={exportCSV}>
+        <Button variant="secondary" size="sm" onClick={exportCSV} loading={exporting}>
           <Download className="h-4 w-4" />
-          CSV İndir
+          {exporting ? 'İndiriliyor...' : 'CSV İndir'}
         </Button>
       </div>
 

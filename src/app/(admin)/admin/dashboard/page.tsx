@@ -1,3 +1,5 @@
+import { unstable_cache } from 'next/cache'
+import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { createClient } from '@/lib/supabase/server'
 import { StatCard } from '@/components/dashboard/StatCard'
 import { Card } from '@/components/ui/Card'
@@ -7,48 +9,68 @@ import { Users, MapPin, Calendar, ClipboardList } from 'lucide-react'
 import Link from 'next/link'
 import type { VisitWithProfile } from '@/types'
 
+// İstatistik sayıları tüm adminler için aynı veriyi gösterir.
+// 60s cache: her request'te 6 DB sorgusu yerine saniyede 1 sorgu.
+const getCachedStats = unstable_cache(
+  async (today: string, weekStart: string, monthStart: string) => {
+    const sb = createServiceClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!,
+      { auth: { autoRefreshToken: false, persistSession: false } }
+    )
+    const [todayR, weekR, monthR, totalR, staffR, companyR] = await Promise.all([
+      sb.from('visits').select('*', { count: 'exact', head: true }).eq('visit_date', today),
+      sb.from('visits').select('*', { count: 'exact', head: true }).gte('visit_date', weekStart),
+      sb.from('visits').select('*', { count: 'exact', head: true }).gte('visit_date', monthStart),
+      sb.from('visits').select('*', { count: 'exact', head: true }),
+      sb.from('profiles').select('*', { count: 'exact', head: true }).eq('role', 'personel').eq('active', true),
+      sb.from('companies').select('*', { count: 'exact', head: true }),
+    ])
+    return {
+      todayCount:   todayR.count   ?? 0,
+      weekCount:    weekR.count    ?? 0,
+      monthCount:   monthR.count   ?? 0,
+      totalCount:   totalR.count   ?? 0,
+      staffCount:   staffR.count   ?? 0,
+      companyCount: companyR.count ?? 0,
+    }
+  },
+  ['admin-dashboard-stats'],
+  { revalidate: 60 }
+)
+
 export default async function AdminDashboardPage() {
-  const supabase = await createClient()
   const today = new Date().toISOString().slice(0, 10)
   const weekStart = (() => {
     const d = new Date()
-    const day = d.getDay()
-    const diff = day === 0 ? -6 : 1 - day
+    const diff = d.getDay() === 0 ? -6 : 1 - d.getDay()
     d.setDate(d.getDate() + diff)
     return d.toISOString().slice(0, 10)
   })()
   const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0, 10)
 
-  const [
-    { count: todayCount },
-    { count: weekCount },
-    { count: monthCount },
-    { count: totalCount },
-    { count: staffCount },
-    { count: companyCount },
-    { data: recentVisits },
-  ] = await Promise.all([
-    supabase.from('visits').select('*', { count: 'exact', head: true }).eq('visit_date', today),
-    supabase.from('visits').select('*', { count: 'exact', head: true }).gte('visit_date', weekStart),
-    supabase.from('visits').select('*', { count: 'exact', head: true }).gte('visit_date', monthStart),
-    supabase.from('visits').select('*', { count: 'exact', head: true }),
-    supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('role', 'personel').eq('active', true),
-    supabase.from('companies').select('*', { count: 'exact', head: true }),
-    supabase.from('visits')
-      .select('*, profiles(id, name, email)')
-      .order('created_at', { ascending: false })
-      .limit(10),
+  const [stats, { data: recentVisits }] = await Promise.all([
+    getCachedStats(today, weekStart, monthStart),
+    // Son ziyaretler cache'lenmez — her zaman taze gösterilir
+    createClient().then(sb =>
+      sb.from('visits')
+        .select('id, company_name_snapshot, visit_date, visit_time, location_status, profiles(name)')
+        .order('created_at', { ascending: false })
+        .limit(10)
+    ),
   ])
+
+  const { todayCount, weekCount, monthCount, totalCount, staffCount, companyCount } = stats
 
   return (
     <div className="space-y-6">
       {/* İstatistik kartları */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
-        <StatCard title="Bugün" value={todayCount ?? 0} icon={<Calendar className="h-5 w-5" />} color="blue" subtitle="ziyaret kaydı" />
-        <StatCard title="Bu Hafta" value={weekCount ?? 0} icon={<MapPin className="h-5 w-5" />} color="green" subtitle="ziyaret kaydı" />
-        <StatCard title="Bu Ay" value={monthCount ?? 0} icon={<BarChartIcon />} color="purple" subtitle="ziyaret kaydı" />
-        <StatCard title="Toplam" value={totalCount ?? 0} icon={<ClipboardList className="h-5 w-5" />} color="gray" subtitle="tüm ziyaretler" />
-        <StatCard title="Aktif Personel" value={staffCount ?? 0} icon={<Users className="h-5 w-5" />} color="orange" subtitle={`/ ${companyCount ?? 0} firma`} />
+        <StatCard title="Bugün"         value={todayCount}   icon={<Calendar className="h-5 w-5" />}     color="blue"   subtitle="ziyaret kaydı" />
+        <StatCard title="Bu Hafta"      value={weekCount}    icon={<MapPin className="h-5 w-5" />}       color="green"  subtitle="ziyaret kaydı" />
+        <StatCard title="Bu Ay"         value={monthCount}   icon={<BarChartIcon />}                     color="purple" subtitle="ziyaret kaydı" />
+        <StatCard title="Toplam"        value={totalCount}   icon={<ClipboardList className="h-5 w-5" />} color="gray"  subtitle="tüm ziyaretler" />
+        <StatCard title="Aktif Personel" value={staffCount}  icon={<Users className="h-5 w-5" />}       color="orange" subtitle={`/ ${companyCount} firma`} />
       </div>
 
       {/* Son ziyaretler */}

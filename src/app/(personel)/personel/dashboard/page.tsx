@@ -27,7 +27,7 @@ export default async function PersonelDashboardPage() {
     supabase.from('visits').select('*', { count: 'exact', head: true })
       .eq('user_id', user.id).gte('visit_date', monthStart),
     supabase.from('visits')
-      .select('*')
+      .select('id, company_name_snapshot, visit_date, visit_time, location_status')
       .eq('user_id', user.id)
       .order('visit_date', { ascending: false })
       .order('visit_time', { ascending: false })

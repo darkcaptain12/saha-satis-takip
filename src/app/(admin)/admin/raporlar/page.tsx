@@ -11,9 +11,10 @@ export default async function AdminRaporlarPage() {
   const [{ data: visits }, { data: staff }] = await Promise.all([
     supabase
       .from('visits')
-      .select('*, profiles(id, name, email)')
+      .select('visit_date, user_id, company_name_snapshot, profiles(id, name)')
       .gte('visit_date', monthStart)
-      .order('visit_date', { ascending: false }),
+      .order('visit_date', { ascending: false })
+      .limit(500),
     supabase
       .from('profiles')
       .select('id, name')

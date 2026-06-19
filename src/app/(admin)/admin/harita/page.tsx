@@ -7,7 +7,7 @@ export default async function AdminHaritaPage() {
 
   const { data: visits } = await supabase
     .from('visits')
-    .select('*')
+    .select('id, latitude, longitude, company_name_snapshot, visit_date, visit_time, accuracy, note, location_status')
     .eq('location_status', 'success')
     .not('latitude', 'is', null)
     .order('created_at', { ascending: false })

@@ -16,9 +16,9 @@ export default async function AdminFirmaDetayPage({ params }: PageProps) {
   const supabase = await createClient()
 
   const [{ data: company }, { data: visits }] = await Promise.all([
-    supabase.from('companies').select('*').eq('id', id).single(),
+    supabase.from('companies').select('id, name, address, phone, note').eq('id', id).single(),
     supabase.from('visits')
-      .select('*, profiles(id, name, email)')
+      .select('id, visit_date, visit_time, location_status, note, profiles(name)')
       .eq('company_id', id)
       .order('visit_date', { ascending: false })
       .limit(100),

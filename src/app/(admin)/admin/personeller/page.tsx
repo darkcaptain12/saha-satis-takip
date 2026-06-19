@@ -9,20 +9,18 @@ import { User } from 'lucide-react'
 export default async function AdminPersonellerPage() {
   const supabase = await createClient()
 
-  const { data: staff } = await supabase
-    .from('profiles')
-    .select('*')
-    .eq('role', 'personel')
-    .order('name')
-
-  // Kişi başına ziyaret sayıları
-  const { data: visitCounts } = await supabase
-    .from('visits')
-    .select('user_id')
+  const [{ data: staff }, { data: visitCounts }] = await Promise.all([
+    supabase
+      .from('profiles')
+      .select('id, name, email, role, active, created_at')
+      .eq('role', 'personel')
+      .order('name'),
+    supabase.rpc('get_user_visit_counts'),
+  ])
 
   const countMap: Record<string, number> = {}
-  visitCounts?.forEach((v: { user_id: string }) => {
-    countMap[v.user_id] = (countMap[v.user_id] ?? 0) + 1
+  ;(visitCounts ?? []).forEach((r: { user_id: string; visit_count: number }) => {
+    countMap[r.user_id] = Number(r.visit_count)
   })
 
   return (
